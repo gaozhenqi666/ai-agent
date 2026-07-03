@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Harness · 个人 AI 知识助手</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    /* ====== 中断按钮 ====== */
+    .btn-stop {
+      background: var(--danger) !important;
+      color: #fff !important;
+      border-color: var(--danger) !important;
+    }
+    .btn-stop:hover { background: #b91c1c !important; }
+
+    /* ====== 编辑按钮（所有用户消息 hover 显示） ====== */
+    .msg-edit {
+      display: none;
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      width: 24px; height: 24px;
+      border-radius: 4px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      cursor: pointer;
+      align-items: center; justify-content: center;
+      font-size: 12px;
+      color: var(--muted);
+      transition: all 0.15s;
+    }
+    .message.user-msg { position: relative; }
+    .message.user-msg:hover .msg-edit { display: flex; }
+    .message.user-msg.is-editing .msg-edit { display: none; }
+    .msg-edit:hover { color: var(--accent); border-color: var(--accent); }
+
+    /* ====== 编辑模式输入框 ====== */
+    .edit-input-wrap {
+      display: flex; flex-direction: column;
+      border: 1px solid var(--accent);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .edit-input-wrap textarea {
+      width: 100%; border: none; outline: none;
+      padding: 8px 12px; font-size: 13.5px; line-height: 1.6;
+      min-height: 60px; resize: vertical;
+      font-family: var(--font-body); background: var(--surface);
+    }
+    .edit-input-actions {
+      display: flex; gap: 6px; padding: 6px 10px;
+      background: var(--bg-paper); justify-content: flex-end;
+      border-top: 1px solid var(--border);
+    }
+    .edit-btn {
+      padding: 4px 12px; border-radius: var(--radius-sm);
+      font-size: 12px; font-weight: 500; cursor: pointer;
+      border: 1px solid var(--border);
+      display: flex; align-items: center; gap: 4px;
+    }
+    .edit-btn-send { background: var(--ink); color: #fff; border-color: var(--ink) !important; }
+    .edit-btn-send:hover { opacity: 0.85; }
+    .edit-btn-cancel { background: var(--surface); color: var(--ink); }
+    .edit-btn-cancel:hover { background: var(--bg); }
+
+    /* ====== 底部进度条 ====== */
+    .global-progress {
+      position: fixed; bottom: 0; left: var(--sidebar-w); right: 0;
+      height: 3px; z-index: 100; background: transparent;
+    }
+    .global-progress-bar {
+      height: 100%; background: var(--accent);
+      transition: width 0.3s ease;
+      width: 0%;
+    }
+    .global-progress.running .global-progress-bar {
+      animation: progressPulse 1.5s ease-in-out infinite;
+    }
+    @keyframes progressPulse {
+      0% { width: 0%; } 30% { width: 60%; } 70% { width: 85%; } 100% { width: 95%; }
+    }
+    .global-progress.done .global-progress-bar {
+      width: 100%; background: var(--success);
+      transition: width 0.5s ease, background 0.3s;
+    }
+    .global-progress.done { animation: fadeProgress 1.5s forwards; }
+    @keyframes fadeProgress {
+      0% { opacity: 1; } 70% { opacity: 1; } 100% { opacity: 0; }
+    }
+
+    /* ====== Toast ====== */
+    .toast {
+      position: fixed; top: 16px; left: 50%;
+      transform: translateX(-50%);
+      background: var(--ink); color: #fff;
+      padding: 8px 20px; border-radius: 20px;
+      font-size: 13px; z-index: 200;
+      animation: toastIn 0.3s ease, toastOut 0.3s ease 2.5s forwards;
+      box-shadow: var(--shadow-lg);
+    }
+    @keyframes toastIn { from { opacity: 0; transform: translateX(-50%) translateY(-10px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+    @keyframes toastOut { from { opacity: 1; } to { opacity: 0; } }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <!-- ============== Sidebar ============== -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="brand">
+          <svg width="28" height="28" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+            <rect width="32" height="32" rx="5" fill="#1C1A17"/>
+            <path d="M 3 17 C 7 7, 11 7, 15 17 C 19 27, 23 27, 27 17" stroke="white" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <div><div class="brand-text">oddfeelings</div></div>
+        </div>
+        <button class="btn-new-chat" onclick="newChat()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          新对话
+        </button>
+      </div>
+
+      <nav class="nav">
+        <a class="nav-item active" href="index.html">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          对话
+        </a>
+        <a class="nav-item" href="knowledge.html">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+          知识库
+        </a>
+        <a class="nav-item" href="articles.html">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
+          文章
+        </a>
+      </nav>
+
+      <div class="session-list" id="sessionList">
+        <div class="muted" style="padding:12px;font-size:12px;">加载中...</div>
+      </div>
+
+      <div class="sidebar-footer">
+        <div class="avatar">G</div>
+        <div class="user-meta">
+          <div class="user-name">gaozhenqi</div>
+          <div class="user-email">default-user</div>
+        </div>
+        <button class="icon-btn" title="设置">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </button>
+      </div>
+    </aside>
+
+    <!-- ============== Main ============== -->
+    <main class="main">
+      <header class="topbar">
+        <div class="topbar-title" id="topbarTitle">新对话</div>
+        <div class="context-meter" id="contextMeter">
+          <span class="dot"></span>
+          <span id="contextText">0 / 100K tokens</span>
+        </div>
+      </header>
+
+      <div class="chat-area" id="chatArea">
+        <div class="chat-inner" id="chatInner">
+          <div class="system-msg" id="welcomeMsg">开始一段新对话，问点什么吧</div>
+        </div>
+      </div>
+
+      <div class="global-progress" id="globalProgress"><div class="global-progress-bar"></div></div>
+
+      <div class="input-area">
+        <div class="input-inner">
+          <div class="input-box">
+            <textarea id="msgInput" placeholder="问点什么...（Enter 发送，Shift+Enter 换行）"></textarea>
+            <div class="input-toolbar">
+              <div class="left">
+                <button class="icon-btn" title="附加文件">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                </button>
+              </div>
+              <div class="right">
+                <span class="token-info" id="tokenInfo">0 tokens</span>
+                <button class="btn btn-primary" id="sendBtn" onclick="sendMessage()">
+                  发送
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+  // ======================================================================
+  // Features:
+  //   1. Progress indicator (bottom bar + toast)
+  //   2. Interrupt button (stop during streaming)
+  //   3. Background task persistence (sessionStorage)
+  //   4. Edit button on all user messages → inline edit + resend
+  //      - Latest msg (streaming): interrupt → cleanup → resend
+  //      - Historical msg (done): just resend as new turn
+  // ======================================================================
+
+  const API = '';
+
+  async function apiFetch(path, opts = {}) {
+    const res = await fetch(API + path, {
+      headers: { 'Content-Type': 'application/json', ...opts.headers },
+      ...opts,
+    });
+    const data = await res.json();
+    if (data.code !== 0) throw new Error(data.message || 'API error');
+    return data.data;
+  }
+
+  // ======== State ========
+  let currentSessionId = localStorage.getItem('currentSessionId') || null;
+  let abortController = null;
+  let currentStreamingMsgId = null;
+
+  function persistTask(sid, msgId, content) {
+    sessionStorage.setItem('active_task', JSON.stringify({
+      session_id: sid, streaming_msg_id: msgId, partial_content: content, ts: Date.now(),
+    }));
+  }
+  function clearPersistTask() { sessionStorage.removeItem('active_task'); }
+  function restorePersistTask() {
+    const raw = sessionStorage.getItem('active_task');
+    if (!raw) return null;
+    try { return JSON.parse(raw); } catch(e) { return null; }
+  }
+
+  // ======== Sessions ========
+  async function loadSessions() {
+    try {
+      const data = await apiFetch('/api/sessions');
+      renderSessionList(data.sessions);
+    } catch (e) {
+      document.getElementById('sessionList').innerHTML = '<div style="padding:12px;font-size:12px;color:#999;">加载失败</div>';
+    }
+  }
+
+  function renderSessionList(sessions) {
+    const container = document.getElementById('sessionList');
+    if (!sessions.length) {
+      container.innerHTML = '<div style="padding:16px;font-size:12px;color:var(--muted-2);text-align:center;">还没有对话</div>';
+      return;
+    }
+    const today = new Date().toISOString().slice(0, 10);
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    const groups = { '今天': [], '昨天': [], '更早': [] };
+    for (const s of sessions) {
+      const day = s.last_active.slice(0, 10);
+      if (day === today) groups['今天'].push(s);
+      else if (day === yesterday) groups['昨天'].push(s);
+      else groups['更早'].push(s);
+    }
+    let html = '';
+    for (const [label, items] of Object.entries(groups)) {
+      if (!items.length) continue;
+      html += `<div class="session-group-title">${label}</div>`;
+      for (const s of items) {
+        const time = _formatTime(s.last_active);
+        const active = s.session_id === currentSessionId ? ' active' : '';
+        html += `<div class="session-item${active}" data-id="${s.session_id}" onclick="selectSession('${s.session_id}')">
+          <svg class="icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          <span class="title">${_esc(s.title)}</span><span class="time">${time}</span>
+          <button class="session-delete-btn" onclick="event.stopPropagation();deleteSession('${s.session_id}')" title="删除对话">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button></div>`;
+      }
+    }
+    container.innerHTML = html;
+  }
+
+  function _formatTime(iso) {
+    const d = new Date(iso);
+    const today = new Date().toISOString().slice(0, 10);
+    if (iso.slice(0, 10) === today) return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+    return `${d.getMonth()+1}/${d.getDate()}`;
+  }
+  function _esc(s) {
+    const d = document.createElement('div'); d.textContent = s; return d.innerHTML;
+  }
+
+  // ======== Chat ========
+  async function selectSession(sessionId) {
+    currentSessionId = sessionId;
+    localStorage.setItem('currentSessionId', sessionId);
+    document.querySelectorAll('.session-item').forEach(el => {
+      el.classList.toggle('active', el.dataset.id === sessionId);
+    });
+    await loadMessages(sessionId);
+  }
+
+  async function loadMessages(sessionId) {
+    try {
+      const data = await apiFetch(`/api/sessions/${sessionId}/messages`);
+      document.getElementById('topbarTitle').textContent = _esc(data.messages[0]?.content?.slice(0, 30) || '对话');
+      _updateContextMeter(data.total_tokens);
+      renderMessages(data.messages);
+    } catch (e) {
+      console.error('loadMessages error:', e);
+    }
+  }
+
+  function renderMessages(messages) {
+    const container = document.getElementById('chatInner');
+    let html = '';
+    for (let i = 0; i < messages.length; i++) {
+      const m = messages[i];
+      if (m.role === 'system') continue;
+      // Determine if this is the latest user message
+      const isLatest = (i === messages.length - 1 || (i === messages.length - 2 && messages[i+1]?.role === 'assistant'));
+      html += _renderOneMessage(m, isLatest && m.role === 'user');
+    }
+    container.innerHTML = html || '<div class="system-msg" id="welcomeMsg">开始一段新对话，问点什么吧</div>';
+    _scrollToBottom();
+  }
+
+  function _renderOneMessage(m, isNewest) {
+    const isUser = m.role === 'user';
+    const avatarClass = isUser ? 'user' : 'assistant';
+    const avatarLetter = isUser ? 'G' : 'H';
+    const authorName = isUser ? '你' : 'Harness';
+    const time = new Date(m.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+    const content = isUser
+      ? `<p class="user-text">${_esc(m.content)}</p>`
+      : marked.parse(m.content || '');
+
+    // Edit button on all user messages
+    const editBtn = isUser
+      ? `<button class="msg-edit" onclick="editUserMessage(event, this)" title="编辑消息">
+           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+         </button>`
+      : '';
+
+    return `<div class="message ${isUser ? 'user-msg' : ''}" data-mid="${m.message_id}" data-newest="${isNewest ? '1' : '0'}">
+      <div class="msg-avatar ${avatarClass}">${avatarLetter}</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-author">${authorName}</span>
+          <span class="msg-time">${time}</span>
+        </div>
+        <div class="msg-content markdown-body">${content}</div>
+        <div class="msg-edit-area" style="display:none;"></div>
+      </div>
+      ${editBtn}
+    </div>`;
+  }
+
+  function _appendMessage(m) {
+    const container = document.getElementById('chatInner');
+    const welcome = document.getElementById('welcomeMsg');
+    if (welcome) welcome.remove();
+    container.insertAdjacentHTML('beforeend', _renderOneMessage(m, true));
+    _scrollToBottom();
+  }
+
+  // ======== Progress ========
+  function showProgress() {
+    const bar = document.getElementById('globalProgress');
+    bar.classList.add('running'); bar.classList.remove('done');
+  }
+  function finishProgress() {
+    const bar = document.getElementById('globalProgress');
+    bar.classList.remove('running'); bar.classList.add('done');
+    setTimeout(() => bar.classList.remove('done'), 2000);
+  }
+  function showToast(msg) {
+    const t = document.createElement('div');
+    t.className = 'toast'; t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), 3000);
+  }
+
+  // ======== Interrupt ========
+  function setSendBtnStop() {
+    const btn = document.getElementById('sendBtn');
+    btn.className = 'btn btn-stop';
+    btn.innerHTML = '中断 <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>';
+    btn.onclick = interruptTask;
+  }
+  function setSendBtnNormal() {
+    const btn = document.getElementById('sendBtn');
+    btn.className = 'btn btn-primary';
+    btn.innerHTML = '发送 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>';
+    btn.onclick = sendMessage;
+    btn.disabled = false;
+  }
+
+  function interruptTask() {
+    if (abortController) {
+      abortController.abort();
+      abortController = null;
+    }
+    // Show "已中断" in streaming message
+    if (currentStreamingMsgId) {
+      const el = document.getElementById(currentStreamingMsgId);
+      if (el) {
+        const contentEl = el.querySelector('.msg-content');
+        if (contentEl) contentEl.innerHTML = '<span style="color:var(--muted);font-style:italic">已中断</span>';
+      }
+    }
+    setSendBtnNormal();
+    finishProgress();
+    currentStreamingMsgId = null;
+    clearPersistTask();
+    _scrollToBottom();
+  }
+
+  // ======== Feature: Edit user message ========
+  function editUserMessage(e, btnEl) {
+    e.stopPropagation();
+
+    // Don't allow edit while another message is being edited
+    if (document.querySelector('.message.user-msg.is-editing')) return;
+
+    const msgEl = btnEl.closest('.message');
+    const contentEl = msgEl.querySelector('.msg-content');
+    const userTextEl = contentEl.querySelector('.user-text');
+    const originalText = userTextEl ? userTextEl.textContent : '';
+    const messageId = msgEl.getAttribute('data-mid');
+    const isNewest = msgEl.getAttribute('data-newest') === '1';
+    const isProcessing = !!abortController && isNewest;
+
+    // Hide original content and edit button, show edit area
+    contentEl.style.display = 'none';
+    btnEl.style.display = 'none';
+    msgEl.classList.add('is-editing');
+
+    const editArea = msgEl.querySelector('.msg-edit-area');
+    editArea.style.display = 'block';
+    editArea.innerHTML = `
+      <div class="edit-input-wrap">
+        <textarea class="edit-textarea" rows="3">${_esc(originalText)}</textarea>
+        <div class="edit-input-actions">
+          <button class="edit-btn edit-btn-cancel" onclick="cancelEdit(this)" title="取消">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            取消
+          </button>
+          <button class="edit-btn edit-btn-send" onclick="submitEdit(this, '${messageId}', ${isProcessing})" title="发送">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            发送
+          </button>
+        </div>
+      </div>`;
+    editArea.querySelector('textarea').focus();
+  }
+
+  function cancelEdit(btnEl) {
+    const msgEl = btnEl.closest('.message');
+    // Restore original state
+    msgEl.querySelector('.msg-content').style.display = '';
+    msgEl.querySelector('.msg-edit').style.display = '';
+    msgEl.querySelector('.msg-edit-area').style.display = 'none';
+    msgEl.classList.remove('is-editing');
+  }
+
+  async function submitEdit(btnEl, messageId, isProcessing) {
+    const msgEl = btnEl.closest('.message');
+    const textarea = msgEl.querySelector('.edit-textarea');
+    const newMessage = textarea.value.trim();
+    if (!newMessage) { showToast('消息不能为空'); return; }
+
+    if (isProcessing) {
+      // === Editing the latest message while AI is working ===
+      // 1. Abort current stream
+      if (abortController) {
+        abortController.abort();
+        abortController = null;
+      }
+      setSendBtnNormal();
+      finishProgress();
+      currentStreamingMsgId = null;
+      clearPersistTask();
+
+      // 2. Call interrupt endpoint to clean up side effects + write "任务已中断"
+      if (currentSessionId) {
+        try {
+          await apiFetch(`/api/sessions/${currentSessionId}/interrupt`, { method: 'POST' });
+        } catch (e) { console.error('interrupt error:', e); }
+      }
+
+      // 3. Restore edit UI back to normal bubble (show "已中断" below)
+      msgEl.querySelector('.msg-content').style.display = '';
+      msgEl.querySelector('.msg-edit').style.display = '';
+      msgEl.querySelector('.msg-edit-area').style.display = 'none';
+      msgEl.classList.remove('is-editing');
+
+      // 4. Reload messages to show the "任务已中断" assistant message
+      if (currentSessionId) {
+        await loadMessages(currentSessionId);
+      }
+
+      // 5. Put the new message in input
+      document.getElementById('msgInput').value = newMessage;
+      document.getElementById('msgInput').focus();
+
+      // 6. Auto-send the new message
+      sendMessage();
+    } else {
+      // === Editing a historical (completed) message ===
+      // Just restore UI and put message in input for user to send
+      msgEl.querySelector('.msg-content').style.display = '';
+      msgEl.querySelector('.msg-edit').style.display = '';
+      msgEl.querySelector('.msg-edit-area').style.display = 'none';
+      msgEl.classList.remove('is-editing');
+
+      document.getElementById('msgInput').value = newMessage;
+      document.getElementById('msgInput').focus();
+      _scrollToBottom();
+    }
+  }
+
+  // ======== Status cards ========
+  function _renderStatusCards(cards, container) {
+    let statusWrap = document.getElementById('statusWrap');
+    if (!statusWrap) {
+      statusWrap = document.createElement('div');
+      statusWrap.id = 'statusWrap';
+      statusWrap.className = 'status-cards';
+      container.appendChild(statusWrap);
+    }
+
+    const taskMap = {};
+    for (const c of cards) {
+      const baseType = (c.type || '').replace(/_complete$|_failed$|_progress$/, '');
+      if (!taskMap[baseType]) taskMap[baseType] = { latest: c, complete: null, article_id: null, url: null, title: null };
+      taskMap[baseType].latest = c;
+      if (c.type.endsWith('_complete')) {
+        taskMap[baseType].complete = true;
+        taskMap[baseType].article_id = c.article_id;
+        taskMap[baseType].url = c.url;
+        taskMap[baseType].title = c.title || c.message;
+      } else if (c.type.endsWith('_failed')) {
+        taskMap[baseType].complete = false;
+        taskMap[baseType].failed = true;
+      }
+    }
+
+    let html = '';
+    for (const [baseType, info] of Object.entries(taskMap)) {
+      const isProgress = info.latest.type.endsWith('_progress');
+      const isComplete = info.complete === true;
+      const isFailed = info.failed === true;
+      let icon, label, body;
+      if (isProgress) {
+        icon = '<span class="status-spinner"></span>'; label = '进行中'; body = _esc(info.latest.message);
+      } else if (isComplete) {
+        icon = '✅'; label = '完成'; body = _esc(info.latest.message);
+      } else if (isFailed) {
+        icon = '❌'; label = '失败'; body = _esc(info.latest.message);
+      } else {
+        icon = '⏳'; label = '等待'; body = _esc(info.latest.message || '');
+      }
+      const cardClass = isProgress ? 'pending' : (isComplete ? 'success' : (isFailed ? 'error' : ''));
+      html += `<div class="status-card ${cardClass}">
+        <div class="status-card-head"><span class="status-card-icon">${icon}</span><span class="status-card-label">${label}</span></div>
+        <div class="status-card-body">${body}</div>
+        ${isComplete && info.url ? `<a class="status-card-link" href="${info.url}">打开 ${_esc(info.title || '查看')} →</a>` : ''}
+      </div>`;
+    }
+    statusWrap.innerHTML = html;
+  }
+
+  // ======== Send (SSE Streaming) ========
+  async function sendMessage() {
+    if (abortController) return;
+    const input = document.getElementById('msgInput');
+    const msg = input.value.trim();
+    if (!msg) return;
+
+    abortController = new AbortController();
+    setSendBtnStop();
+    showProgress();
+
+    // Append user message (temp ID, updated when start arrives)
+    const tempUserId = 'tmp-usr-' + Date.now();
+    _appendMessage({ role: 'user', content: msg, message_id: tempUserId, created_at: new Date().toISOString() });
+
+    const container = document.getElementById('chatInner');
+    const welcome = document.getElementById('welcomeMsg');
+    if (welcome) welcome.remove();
+
+    const msgId = 'stream-' + Date.now();
+    currentStreamingMsgId = msgId;
+    container.insertAdjacentHTML('beforeend', `
+      <div class="message" id="${msgId}">
+        <div class="msg-avatar assistant">H</div>
+        <div class="msg-body">
+          <div class="msg-head">
+            <span class="msg-author">Harness</span>
+            <span class="msg-time">${new Date().toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'})}</span>
+          </div>
+          <div class="msg-content markdown-body"><div class="typing"><span></span><span></span><span></span></div></div>
+        </div>
+      </div>`);
+    _scrollToBottom();
+
+    input.value = '';
+    persistTask(currentSessionId, msgId, '');
+
+    try {
+      const resp = await fetch('/api/chat/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: msg, session_id: currentSessionId }),
+        signal: abortController.signal,
+      });
+
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let fullContent = '', buffer = '', currentEvent = '';
+      const contentEl = document.querySelector(`#${msgId} .msg-content`);
+      const statusCards = [];
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        for (const line of lines) {
+          if (line.startsWith('event: ')) {
+            currentEvent = line.slice(7).trim();
+          } else if (line.startsWith('data: ') && currentEvent) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (currentEvent === 'start') {
+                currentSessionId = data.session_id;
+                localStorage.setItem('currentSessionId', data.session_id);
+                document.getElementById('topbarTitle').textContent = msg.slice(0, 30);
+                if (data.user_message_id && tempUserId) {
+                  const tempEl = document.querySelector(`[data-mid="${tempUserId}"]`);
+                  if (tempEl) {
+                    tempEl.setAttribute('data-mid', data.user_message_id);
+                    tempEl.setAttribute('data-newest', '1');
+                  }
+                }
+              } else if (currentEvent === 'content') {
+                fullContent += data.delta;
+                if (typeof marked !== 'undefined' && marked.parse) {
+                  contentEl.innerHTML = marked.parse(fullContent);
+                } else {
+                  contentEl.textContent = fullContent;
+                }
+                persistTask(currentSessionId, msgId, fullContent);
+                _scrollToBottom();
+              } else if (currentEvent === 'status') {
+                statusCards.push(data);
+                _renderStatusCards(statusCards, container);
+                _scrollToBottom();
+              } else if (currentEvent === 'error') {
+                contentEl.innerHTML = `<span style="color:#dc2626;">错误: ${_esc(data.message)}</span>`;
+              }
+            } catch (_) {}
+            currentEvent = '';
+          }
+        }
+      }
+
+      if (fullContent && typeof marked !== 'undefined' && marked.parse) {
+        contentEl.innerHTML = marked.parse(fullContent);
+      }
+      loadSessions();
+    } catch (e) {
+      if (e.name === 'AbortError') return; // user interrupted via stop button
+      console.error('sendMessage error:', e);
+      const ce = document.querySelector(`#${msgId} .msg-content`);
+      if (ce) ce.innerHTML = `<span style="color:#dc2626;">错误: ${_esc(e.message)}</span>`;
+    } finally {
+      abortController = null;
+      currentStreamingMsgId = null;
+      setSendBtnNormal();
+      finishProgress();
+      clearPersistTask();
+      _scrollToBottom();
+    }
+  }
+
+  // ======== Delete Session ========
+  async function deleteSession(sessionId) {
+    const confirmed = await showConfirm({
+      title: '删除对话', desc: '确定删除这个对话？所有消息都会被删除。', type: 'danger', confirmText: '删除',
+    });
+    if (!confirmed) return;
+    try {
+      await apiFetch(`/api/sessions/${sessionId}`, { method: 'DELETE' });
+      if (sessionId === currentSessionId) newChat();
+      loadSessions();
+    } catch (e) {
+      showAlert({ title: '删除失败', desc: e.message, type: 'warning' });
+    }
+  }
+
+  function newChat() {
+    currentSessionId = null;
+    localStorage.removeItem('currentSessionId');
+    document.getElementById('topbarTitle').textContent = '新对话';
+    _updateContextMeter(0);
+    document.getElementById('chatInner').innerHTML = '<div class="system-msg" id="welcomeMsg">开始一段新对话，问点什么吧</div>';
+    document.querySelectorAll('.session-item').forEach(el => el.classList.remove('active'));
+    document.getElementById('msgInput').focus();
+  }
+
+  function _updateContextMeter(tokens) {
+    const max = 100000, pct = Math.min(Number(tokens) / max, 1);
+    const dot = document.getElementById('contextMeter').querySelector('.dot');
+    if (pct >= 1) dot.style.background = 'var(--danger)';
+    else if (pct >= 0.5) dot.style.background = 'var(--warning)';
+    else dot.style.background = 'var(--success)';
+    document.getElementById('contextText').textContent = `${(tokens/1000).toFixed(1)}K / 100K tokens`;
+  }
+
+  function _scrollToBottom() {
+    const area = document.getElementById('chatArea');
+    area.scrollTop = area.scrollHeight;
+  }
+
+  document.addEventListener('DOMContentLoaded', async () => {
+    const input = document.getElementById('msgInput');
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+    });
+    await loadSessions();
+
+    const persisted = restorePersistTask();
+    if (persisted && persisted.session_id) {
+      currentSessionId = persisted.session_id;
+      localStorage.setItem('currentSessionId', persisted.session_id);
+      await loadMessages(persisted.session_id);
+      if (persisted.streaming_msg_id && persisted.partial_content) {
+        const el = document.getElementById(persisted.streaming_msg_id);
+        if (el) {
+          const ce = el.querySelector('.msg-content');
+          if (ce && typeof marked !== 'undefined') ce.innerHTML = marked.parse(persisted.partial_content);
+        }
+      }
+      if (Date.now() - persisted.ts < 60000) showToast('正在恢复上一次对话...');
+    } else if (currentSessionId) {
+      await selectSession(currentSessionId);
+    }
+  });
+  </script>
+  <script src="modal.js"></script>
+</body>
+</html>

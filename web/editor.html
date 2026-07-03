@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>编辑器 · Harness</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    .app { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+    .main { background: var(--bg); }
+
+    .editor-single { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+    .editor-scroll { flex: 1; overflow-y: auto; position: relative; }
+
+    /* ====== 预览 / Markdown 面板共用样式 ====== */
+    .editor-panel {
+      max-width: 760px; margin: 0 auto;
+      padding: 48px 56px 200px;
+      background: var(--surface);
+      min-height: 100%;
+      border-left: 1px solid var(--border);
+      border-right: 1px solid var(--border);
+      outline: none;
+    }
+    .editor-panel h1 { font-family: var(--font-display); font-size: 30px; font-weight: 500; margin: 24px 0 14px; letter-spacing: -0.02em; }
+    .editor-panel h2 { font-family: var(--font-display); font-size: 20px; font-weight: 500; margin: 28px 0 10px; }
+    .editor-panel h3 { font-size: 16px; font-weight: 600; margin: 20px 0 8px; }
+    .editor-panel p { margin: 0 0 14px; line-height: 1.8; }
+    .editor-panel ul, .editor-panel ol { padding-left: 24px; margin: 0 0 14px; }
+    .editor-panel li { margin-bottom: 4px; }
+    .editor-panel code {
+      font-family: var(--font-mono); font-size: 0.88em;
+      background: var(--bg-paper); padding: 2px 6px; border-radius: 4px;
+      border: 1px solid var(--border);
+    }
+    .editor-panel pre {
+      background: var(--ink); color: #E5DFD3;
+      padding: 14px 16px; border-radius: var(--radius);
+      overflow-x: auto; font-size: 12.5px; line-height: 1.55;
+      margin: 14px 0;
+    }
+    .editor-panel a { color: var(--accent); text-decoration: underline; }
+    .editor-panel blockquote {
+      border-left: 3px solid var(--accent);
+      margin: 14px 0; padding: 4px 16px;
+      color: var(--muted); font-style: italic;
+    }
+    .editor-panel hr { border: none; border-top: 1px solid var(--border); margin: 24px 0; }
+    .editor-panel img { max-width: 100%; border-radius: var(--radius); }
+    .editor-panel strong { font-weight: 600; color: var(--ink); }
+    .editor-panel em { font-style: italic; color: var(--ink-2); }
+
+    /* contenteditable 激活时的视觉提示 */
+    .editor-panel[contenteditable="true"]:focus {
+      box-shadow: inset 0 0 0 2px var(--accent);
+      border-radius: 6px;
+    }
+
+    /* ====== Markdown textarea ====== */
+    .md-textarea {
+      width: 100%; min-height: 100%;
+      border: none; outline: none;
+      background: transparent;
+      font-family: var(--font-mono);
+      font-size: 13.5px;
+      line-height: 1.85;
+      color: var(--ink);
+      resize: none;
+      padding: 0;
+    }
+
+    /* Markdown 模式：外层禁用滚动，只有 textarea 滚动 */
+    .editor-scroll.no-outer-scroll { overflow: hidden; }
+    .editor-panel.md-mode {
+      display: flex; flex-direction: column;
+      min-height: 100%; padding-bottom: 48px;
+    }
+    .editor-panel.md-mode .md-textarea {
+      flex: 1; min-height: calc(100vh - 160px);
+    }
+
+    /* ====== 模式标签页 ====== */
+    .mode-tabs { display: flex; border-radius: var(--radius-sm); overflow: hidden; border: 1px solid var(--border); }
+    .mode-tab {
+      padding: 5px 16px; font-size: 12.5px; font-weight: 500;
+      border: none; background: var(--surface); color: var(--muted);
+      cursor: pointer; transition: all 0.15s;
+      font-family: var(--font-body);
+    }
+    .mode-tab + .mode-tab { border-left: 1px solid var(--border); }
+    .mode-tab.active { background: var(--ink); color: #fff; }
+
+    /* ====== 响应式：小屏时左侧按钮收起到 top ====== */
+    @media (max-width: 880px) {
+      .editor-panel { padding: 48px 24px 200px; }
+    }
+
+    /* ====== AI 编辑弹窗（框选 → 弹出） ====== */
+    .ai-popover {
+      position: fixed; z-index: 50;
+      display: flex; flex-direction: column;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.12), 0 0 0 1px var(--border);
+      min-width: 520px;
+      max-width: 720px;
+      overflow: hidden;
+    }
+    .ai-popover-header {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-paper);
+      font-size: 12px; color: var(--muted);
+    }
+    .ai-popover-header .ai-icon {
+      width: 22px; height: 22px; border-radius: 5px;
+      background: var(--accent); color: #fff;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .ai-popover-header .close-btn {
+      margin-left: auto; cursor: pointer;
+      color: var(--muted); padding: 2px 6px; border-radius: 4px;
+    }
+    .ai-popover-header .close-btn:hover { background: var(--bg); color: var(--ink); }
+    .ai-popover-input-row {
+      display: flex; gap: 6px; padding: 10px;
+      background: var(--surface);
+    }
+    .ai-popover-input-row textarea {
+      flex: 1; min-height: 38px; max-height: 100px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      padding: 8px 10px;
+      border-radius: var(--radius-sm);
+      font-family: var(--font-body); font-size: 13px; line-height: 1.5;
+      resize: none; outline: none;
+    }
+    .ai-popover-input-row textarea:focus { border-color: var(--accent); }
+    .ai-popover-input-row button {
+      padding: 0 14px; border: none; border-radius: var(--radius-sm);
+      background: var(--accent); color: #fff;
+      font-size: 13px; font-weight: 500; cursor: pointer;
+      display: flex; align-items: center; gap: 4px;
+    }
+    .ai-popover-input-row button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .ai-popover-input-row button:hover:not(:disabled) { background: var(--accent); opacity: 0.85; }
+
+    .ai-popover-actions {
+      display: flex; gap: 8px; padding: 10px;
+      background: var(--bg-paper); border-top: 1px solid var(--border);
+    }
+    .ai-popover-actions button {
+      padding: 6px 14px; border-radius: var(--radius-sm);
+      font-size: 12.5px; font-weight: 500; cursor: pointer;
+      border: 1px solid var(--border);
+      display: flex; align-items: center; gap: 4px;
+    }
+    .btn-accept { background: var(--ink); color: #fff; border-color: var(--ink) !important; }
+    .btn-accept:hover { opacity: 0.85; }
+    .btn-reject { background: var(--surface); color: var(--ink); }
+    .btn-reject:hover { background: var(--bg); }
+    .btn-regen { margin-left: auto; }
+
+    /* ====== 左右对比面板 ====== */
+    .ai-diff-wrap {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 1px; background: var(--border);
+      max-height: 50vh; overflow: auto;
+    }
+    .ai-diff-side {
+      background: var(--surface); padding: 12px 14px;
+      font-family: var(--font-mono); font-size: 12.5px; line-height: 1.6;
+      white-space: pre-wrap; word-break: break-word;
+      overflow-y: auto; max-height: 50vh;
+    }
+    .ai-diff-side-title {
+      font-size: 11px; font-weight: 600; color: var(--muted);
+      margin-bottom: 8px; font-family: var(--font-body);
+      text-transform: uppercase; letter-spacing: 0.06em;
+    }
+    .ai-diff-side.before { background: #fef2f2; }
+    .ai-diff-side.after { background: #f0fdf4; }
+    .ai-diff-side .del { background: #fecaca; padding: 0 2px; border-radius: 2px; }
+    .ai-diff-side .add { background: #bbf7d0; padding: 0 2px; border-radius: 2px; }
+
+    /* ====== 框选出现的 AI 浮标按钮 ====== */
+    .ai-selection-bubble {
+      position: fixed; z-index: 49;
+      display: flex; align-items: center; gap: 4px;
+      padding: 4px 10px 4px 4px;
+      background: var(--ink); color: #fff;
+      border-radius: 20px; font-size: 12px; font-weight: 500;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      cursor: pointer; user-select: none;
+      transition: all 0.15s;
+    }
+    .ai-selection-bubble:hover { background: var(--accent); transform: translateY(-1px); }
+    .ai-selection-bubble .ai-icon {
+      width: 22px; height: 22px; border-radius: 50%;
+      background: var(--accent); color: #fff;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .ai-selection-bubble .ai-icon svg { animation: spin 4s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* loading dots in popover */
+    .ai-loading { display: inline-flex; gap: 3px; align-items: center; }
+    .ai-loading span {
+      width: 4px; height: 4px; border-radius: 50%;
+      background: var(--muted);
+      animation: dotPulse 1.2s infinite;
+    }
+    .ai-loading span:nth-child(2) { animation-delay: 0.2s; }
+    .ai-loading span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes dotPulse { 0%,80%,100% { opacity: 0.3; } 40% { opacity: 1; } }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <main class="main" style="height: 100vh; overflow: hidden; display: flex; flex-direction: column;">
+
+      <!-- ============== Top bar ============== -->
+      <header class="pane-header" style="border-bottom: 1px solid var(--border); padding: 10px 20px;">
+        <a class="icon-btn" href="articles.html" title="返回文章列表">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+        </a>
+        <div style="flex:1;min-width:0;display:flex;align-items:center;gap:10px;">
+          <input
+            type="text"
+            id="editorTitle"
+            placeholder="文章标题..."
+            style="flex:1;border:none;outline:none;background:transparent;font-family:var(--font-display);font-size:15px;font-weight:500;color:var(--ink);min-width:0;"
+          />
+          <span class="status-badge" id="statusLabel"><span class="dot"></span>加载中</span>
+        </div>
+
+        <div class="mode-tabs" style="margin: 0 12px;">
+          <button class="mode-tab active" id="tabPreview" onclick="switchMode('preview')">预览</button>
+          <button class="mode-tab" id="tabMarkdown" onclick="switchMode('markdown')">Markdown</button>
+        </div>
+
+        <button class="btn btn-secondary" onclick="saveDraft()">保存</button>
+      </header>
+
+      <!-- ============== Content area ============== -->
+      <div class="editor-single">
+        <div class="editor-scroll" id="editorScroll">
+          <div style="position:relative;">
+            <div class="editor-panel" id="editorPanel">
+              <div class="muted" style="text-align:center;padding:64px 0;font-size:13px;">加载中...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============== Status bar ============== -->
+      <div class="editor-status">
+        <span><span class="dot" id="statusDot" style="background: var(--success);"></span><span id="statusText">已加载</span></span>
+        <span id="editorStats">字数: 0</span>
+        <div style="flex:1"></div>
+        <span class="muted" id="modeHint">预览模式 · 阅读</span>
+      </div>
+
+    </main>
+  </div>
+
+  <script>
+  const API = '';
+  let currentArticleId = null;
+  let currentMode = 'preview';   // 'preview' | 'markdown'
+  let articleContent = '';      // markdown 源（始终是权威数据源）
+  let articleTitle = '';
+  let isDirty = false;
+  let isSaving = false;
+
+  async function apiFetch(path, opts = {}) {
+    const res = await fetch(API + path, {
+      headers: { 'Content-Type': 'application/json', ...opts.headers },
+      ...opts,
+    });
+    const data = await res.json();
+    if (data.code !== 0) throw new Error(data.message);
+    return data.data;
+  }
+
+  function _esc(s) {
+    const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML;
+  }
+
+  function markDirty() {
+    if (!isDirty) {
+      isDirty = true;
+      document.getElementById('statusLabel').innerHTML = '<span class="dot" style="background:var(--warning);"></span>未保存';
+      document.getElementById('statusDot').style.background = 'var(--warning)';
+      document.getElementById('statusText').textContent = '未保存';
+    }
+  }
+
+  function markClean() {
+    isDirty = false;
+    document.getElementById('statusLabel').innerHTML = '<span class="dot" style="background:var(--success);"></span>已保存';
+    document.getElementById('statusDot').style.background = 'var(--success)';
+    document.getElementById('statusText').textContent = '已保存';
+  }
+
+  // ====== HTML → Markdown 简单转换（保留结构） ======
+  function htmlToMarkdown(html) {
+    // 创建一个临时容器解析 HTML
+    const div = document.createElement('div');
+    div.innerHTML = html;
+    return nodeToMarkdown(div);
+  }
+
+  function nodeToMarkdown(node) {
+    let md = '';
+    for (const child of node.childNodes) {
+      if (child.nodeType === 3) {
+        // 文本节点
+        md += child.textContent;
+      } else if (child.nodeType === 1) {
+        const tag = child.tagName.toLowerCase();
+        const inner = nodeToMarkdown(child);
+        switch (tag) {
+          case 'h1': md += `\n\n# ${inner}\n\n`; break;
+          case 'h2': md += `\n\n## ${inner}\n\n`; break;
+          case 'h3': md += `\n\n### ${inner}\n\n`; break;
+          case 'h4': md += `\n\n#### ${inner}\n\n`; break;
+          case 'h5': md += `\n\n##### ${inner}\n\n`; break;
+          case 'h6': md += `\n\n###### ${inner}\n\n`; break;
+          case 'p': md += `\n\n${inner}\n\n`; break;
+          case 'br': md += '\n'; break;
+          case 'strong': case 'b': md += `**${inner}**`; break;
+          case 'em': case 'i': md += `*${inner}*`; break;
+          case 'a': md += `[${inner}](${child.getAttribute('href') || ''})`; break;
+          case 'code':
+            if (child.parentNode && child.parentNode.tagName.toLowerCase() === 'pre') {
+              md += `\n\n\`\`\`\n${inner}\n\`\`\`\n\n`;
+            } else {
+              md += `\`${inner}\``;
+            }
+            break;
+          case 'pre': md += inner; break;  // inner already handled by code
+          case 'blockquote': md += `\n\n> ${inner.replace(/\n/g, '\n> ')}\n\n`; break;
+          case 'ul':
+          case 'ol':
+            md += '\n\n';
+            let idx = 1;
+            for (const li of child.querySelectorAll(':scope > li')) {
+              const liText = nodeToMarkdown(li);
+              const prefix = tag === 'ol' ? `${idx}. ` : '- ';
+              md += `${prefix}${liText}\n`;
+              idx++;
+            }
+            md += '\n';
+            break;
+          case 'li': md += inner; break;
+          case 'hr': md += '\n\n---\n\n'; break;
+          case 'img':
+            md += `![${child.getAttribute('alt') || ''}](${child.getAttribute('src') || ''})`;
+            break;
+          default: md += inner; break;
+        }
+      }
+    }
+    // 清理多余空行
+    return md.replace(/\n{3,}/g, '\n\n').trim();
+  }
+
+  // ====== 渲染 Markdown ======
+  function renderMarkdown(md) {
+    if (!md) return '<p class="muted" style="text-align:center;padding:64px 0;">（无内容）</p>';
+    try {
+      if (typeof marked !== 'undefined' && marked.parse) {
+        return marked.parse(md);
+      }
+    } catch (e) { console.error('marked parse error:', e); }
+    return _esc(md).replace(/\n/g, '<br>');
+  }
+
+  function updateStats() {
+    let content = articleContent;
+    if (currentMode === 'markdown') {
+      const ta = document.getElementById('editorPanel').querySelector('textarea');
+      if (ta) content = ta.value;
+    }
+    document.getElementById('editorStats').textContent = `字数: ${content.length}`;
+    document.getElementById('modeHint').textContent =
+      currentMode === 'preview' ? '预览模式 · 可直接编辑' : 'Markdown 模式';
+  }
+
+  // ====== 模式切换 ======
+  function switchMode(mode) {
+    if (mode === currentMode) return;
+
+    // 从预览切走 → 同步 contenteditable 内容
+    if (currentMode === 'preview' && mode === 'markdown') {
+      const panel = document.getElementById('editorPanel');
+      if (panel.isContentEditable) {
+        articleContent = htmlToMarkdown(panel.innerHTML);
+      }
+    }
+
+    // 从 markdown 切走 → 同步 textarea 内容
+    if (currentMode === 'markdown' && mode === 'preview') {
+      const ta = document.getElementById('editorPanel').querySelector('textarea');
+      if (ta) articleContent = ta.value;
+    }
+
+    currentMode = mode;
+    document.getElementById('tabPreview').classList.toggle('active', mode === 'preview');
+    document.getElementById('tabMarkdown').classList.toggle('active', mode === 'markdown');
+
+    if (mode === 'preview') {
+      document.getElementById('editorScroll').classList.remove('no-outer-scroll');
+      renderPreviewPanel();
+    } else {
+      document.getElementById('editorScroll').classList.add('no-outer-scroll');
+      renderMarkdownPanel();
+    }
+
+    updateStats();
+  }
+
+  // 预览面板：渲染 HTML + contenteditable
+  function renderPreviewPanel() {
+    const panel = document.getElementById('editorPanel');
+    panel.innerHTML = renderMarkdown(articleContent);
+    panel.contentEditable = 'true';
+    panel.classList.remove('md-mode');
+    // 输入时同步到 articleContent
+    panel.oninput = () => {
+      markDirty();
+      // 防抖：500ms 后同步 markdown 源
+      clearTimeout(panel._syncTimer);
+      panel._syncTimer = setTimeout(() => {
+        articleContent = htmlToMarkdown(panel.innerHTML);
+        updateStats();
+      }, 500);
+    };
+    // Ctrl/Cmd + S 保存
+    panel.onkeydown = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+        e.preventDefault(); saveDraft();
+      }
+    };
+  }
+
+  // Markdown 面板：textarea
+  function renderMarkdownPanel() {
+    const panel = document.getElementById('editorPanel');
+    panel.innerHTML = '';
+    panel.contentEditable = 'false';
+    panel.classList.add('md-mode');
+
+    const ta = document.createElement('textarea');
+    ta.className = 'md-textarea';
+    ta.value = articleContent;
+    ta.placeholder = '开始写你的文章...（Markdown）';
+    ta.addEventListener('input', () => { markDirty(); updateStats(); });
+    ta.addEventListener('keydown', (e) => {
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        const s = ta.selectionStart, end = ta.selectionEnd;
+        ta.value = ta.value.slice(0, s) + '  ' + ta.value.slice(end);
+        ta.selectionStart = ta.selectionEnd = s + 2;
+        markDirty();
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+        e.preventDefault(); saveDraft();
+      }
+    });
+    panel.appendChild(ta);
+    ta.focus();
+  }
+
+  // ====== 加载文章 ======
+  async function loadArticle(articleId) {
+    try {
+      const apiPath = articleId.startsWith('art-')
+        ? `/api/articles/${articleId}`
+        : `/api/knowledge/articles/${articleId}`;
+
+      const resp = await apiFetch(apiPath);
+      const a = resp.item || resp;
+
+      articleTitle = a.title || '';
+      articleContent = a.content || '';
+
+      document.getElementById('editorTitle').value = articleTitle;
+      document.getElementById('editorTitle').addEventListener('input', () => {
+        articleTitle = document.getElementById('editorTitle').value;
+        markDirty();
+      });
+
+      // 默认预览 + 可编辑
+      currentMode = 'preview';
+      renderPreviewPanel();
+
+      markClean();
+      updateStats();
+    } catch (e) {
+      console.error('loadArticle error:', e);
+      document.getElementById('editorPanel').innerHTML =
+        `<div style="text-align:center;padding:64px 0;color:#dc2626;font-size:13px;">加载失败: ${_esc(e.message)}</div>`;
+      document.getElementById('statusLabel').innerHTML = '<span class="dot" style="background:var(--danger);"></span>加载失败';
+    }
+  }
+
+  // ====== 保存 ======
+  async function saveDraft() {
+    if (isSaving) return;
+    if (!currentArticleId) {
+      showAlert({ title: '提示', desc: '无法保存：新文章请从知识库或对话创建', type: 'warning' });
+      return;
+    }
+
+    // 同步最新内容到 articleContent
+    if (currentMode === 'preview') {
+      const panel = document.getElementById('editorPanel');
+      if (panel.isContentEditable) {
+        articleContent = htmlToMarkdown(panel.innerHTML);
+      }
+    } else if (currentMode === 'markdown') {
+      const ta = document.getElementById('editorPanel').querySelector('textarea');
+      if (ta) articleContent = ta.value;
+    }
+
+    const title = document.getElementById('editorTitle').value;
+
+    isSaving = true;
+    const saveBtn = document.querySelector('header .btn-secondary');
+    const oldText = saveBtn ? saveBtn.textContent : '';
+    if (saveBtn) saveBtn.textContent = '保存中...';
+
+    try {
+      const apiPath = currentArticleId.startsWith('art-')
+        ? `/api/articles/${currentArticleId}`
+        : `/api/knowledge/articles/${currentArticleId}`;
+
+      await apiFetch(apiPath, {
+        method: 'PATCH',
+        body: JSON.stringify({ content: articleContent, title }),
+      });
+
+      markClean();
+      setTimeout(() => { window.location.href = 'articles.html'; }, 600);
+    } catch (e) {
+      console.error('saveDraft error:', e);
+      showAlert({ title: '保存失败', desc: e.message, type: 'warning' });
+    } finally {
+      isSaving = false;
+      if (saveBtn) saveBtn.textContent = oldText || '保存';
+    }
+  }
+
+  window.addEventListener('beforeunload', (e) => {
+    if (isDirty) {
+      e.preventDefault();
+      e.returnValue = '有未保存的修改，确定要离开吗？';
+    }
+  });
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const params = new URLSearchParams(window.location.search);
+    currentArticleId = params.get('id');
+    if (currentArticleId) {
+      loadArticle(currentArticleId);
+    } else {
+      document.getElementById('editorPanel').innerHTML =
+        '<div class="muted" style="text-align:center;padding:64px 0;">未指定文章 ID</div>';
+    }
+    initAISelectionWatcher();
+  });
+
+  // ============================================================
+  // AI 编辑：框选 + 弹窗 + 流式对比
+  // ============================================================
+  let aiPopover = null;
+  let aiBubble = null;
+  let aiAbort = null;
+  let currentEdit = null;   // {selected, instruction, beforeContent, afterContent, savedRange}
+  let highlightSpan = null;  // 持久高亮元素
+
+  function initAISelectionWatcher() {
+    // 监听面板内文本框选（contenteditable 模式下）
+    const panel = document.getElementById('editorPanel');
+    document.addEventListener('selectionchange', () => {
+      const sel = window.getSelection();
+      if (!sel || sel.isCollapsed) { hideAIBubble(); return; }
+      const text = sel.toString().trim();
+      if (!text || text.length < 2) { hideAIBubble(); return; }
+      // 必须在编辑器面板内
+      if (!panel.contains(sel.anchorNode) || !panel.contains(sel.focusNode)) {
+        hideAIBubble();
+        return;
+      }
+      // 已在弹窗中？不显示
+      if (aiPopover && !aiPopover.contains(document.activeElement)) {
+        // 用户重新框选 → 关闭旧的弹窗
+        if (aiPopover && aiPopover.style.display !== 'none') {
+          aiPopover.remove(); aiPopover = null;
+        }
+      }
+      showAIBubble(sel, text);
+    });
+  }
+
+  function showAIBubble(sel, text) {
+    if (!aiBubble) {
+      aiBubble = document.createElement('div');
+      aiBubble.className = 'ai-selection-bubble';
+      aiBubble.innerHTML = `<span class="ai-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L9 9l-7 1 5 5-1 7 6-3 6 3-1-7 5-5-7-1z"/></svg></span><span>AI 编辑</span>`;
+      aiBubble.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        const selText = sel.toString();
+        openAIPopover(selText);
+      });
+      document.body.appendChild(aiBubble);
+    }
+    const range = sel.getRangeAt(0).getBoundingClientRect();
+    aiBubble.style.left = (range.left + range.width / 2 - 40) + 'px';
+    aiBubble.style.top = (range.top - 36) + 'px';
+    aiBubble.style.display = 'flex';
+  }
+
+  function hideAIBubble() {
+    if (aiBubble) aiBubble.style.display = 'none';
+  }
+
+  function openAIPopover(selectedText) {
+    if (aiPopover) aiPopover.remove();
+
+    // 保存选区范围（用于持久高亮）
+    const sel = window.getSelection();
+    let savedRange = null;
+    if (sel && sel.rangeCount > 0) {
+      savedRange = sel.getRangeAt(0).cloneRange();
+    }
+
+    // 用 mark 标签包裹选中文字，保持高亮
+    if (savedRange && !savedRange.collapsed) {
+      highlightSpan = document.createElement('mark');
+      highlightSpan.className = 'ai-highlight';
+      highlightSpan.style.cssText = 'background:#fef08a;padding:1px 0;border-radius:2px;';
+      try {
+        savedRange.surroundContents(highlightSpan);
+      } catch (e) {
+        // 跨节点选区可能失败，忽略
+        highlightSpan = null;
+      }
+      sel.removeAllRanges();
+    }
+
+    // 收集当前完整 markdown
+    const fullContent = articleContent;
+
+    aiPopover = document.createElement('div');
+    aiPopover.className = 'ai-popover';
+    aiPopover.innerHTML = `
+      <div class="ai-popover-header">
+        <span class="ai-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L9 9l-7 1 5 5-1 7 6-3 6 3-1-7 5-5-7-1z"/></svg></span>
+        <span>AI 改稿 · 已框选 ${selectedText.length} 字</span>
+        <span class="close-btn" onclick="closeAIPopover()" title="关闭 (ESC)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </span>
+      </div>
+      <div class="ai-popover-input-row">
+        <textarea placeholder="告诉 AI 怎么改...（按 ⌘/Ctrl+Enter 发送）" id="aiPopoverInput"></textarea>
+        <button id="aiPopoverSend" title="发送">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+        </button>
+      </div>
+      <div class="ai-diff-wrap" id="aiDiffWrap" style="display:none;">
+        <div class="ai-diff-side before">
+          <div class="ai-diff-side-title">原文</div>
+          <div id="aiDiffBefore"></div>
+        </div>
+        <div class="ai-diff-side after">
+          <div class="ai-diff-side-title">AI 修改</div>
+          <div id="aiDiffAfter"></div>
+        </div>
+      </div>
+      <div class="ai-popover-actions" id="aiActions" style="display:none;">
+        <button class="btn-accept" onclick="acceptAIEdit()">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          接受
+        </button>
+        <button class="btn-reject" onclick="rejectAIEdit()">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          拒绝
+        </button>
+      </div>`;
+    document.body.appendChild(aiPopover);
+    positionAIPopover();
+
+    // 绑定事件
+    const ta = aiPopover.querySelector('#aiPopoverInput');
+    const sendBtn = aiPopover.querySelector('#aiPopoverSend');
+    sendBtn.addEventListener('click', () => startAIEdit(selectedText, fullContent));
+    ta.addEventListener('keydown', (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        e.preventDefault();
+        startAIEdit(selectedText, fullContent);
+      }
+      if (e.key === 'Escape') { e.preventDefault(); closeAIPopover(); }
+    });
+    ta.focus();
+  }
+
+  function positionAIPopover() {
+    if (!aiPopover) return;
+    const sel = window.getSelection();
+    if (sel && !sel.isCollapsed) {
+      const range = sel.getRangeAt(0).getBoundingClientRect();
+      const pop = aiPopover;
+      pop.style.display = 'flex';
+      const w = pop.offsetWidth, h = pop.offsetHeight;
+      const vw = window.innerWidth, vh = window.innerHeight;
+      let left = range.left + range.width / 2 - w / 2;
+      let top = range.bottom + 8;
+      if (left < 8) left = 8;
+      if (left + w > vw - 8) left = vw - w - 8;
+      if (top + h > vh - 8) top = range.top - h - 8;
+      pop.style.left = left + 'px';
+      pop.style.top = top + 'px';
+    } else {
+      // 居中
+      const pop = aiPopover;
+      pop.style.display = 'flex';
+      const w = pop.offsetWidth, h = pop.offsetHeight;
+      pop.style.left = (window.innerWidth - w) / 2 + 'px';
+      pop.style.top = (120) + 'px';
+    }
+  }
+
+  function startAIEdit(selectedText, fullContent) {
+    const ta = document.getElementById('aiPopoverInput');
+    const sendBtn = document.getElementById('aiPopoverSend');
+    const instruction = (ta?.value || '').trim();
+    if (!instruction) { showAlert({ title: '提示', desc: '请告诉 AI 你想怎么修改', type: 'warning' }); ta?.focus(); return; }
+
+    // 关闭弹窗
+    if (aiAbort) { aiAbort.abort(); aiAbort = null; }
+
+    // 显示对比面板 + loading
+    const diffWrap = document.getElementById('aiDiffWrap');
+    const actions = document.getElementById('aiActions');
+    diffWrap.style.display = 'grid';
+    actions.style.display = 'none';
+
+    const beforeEl = document.getElementById('aiDiffBefore');
+    const afterEl = document.getElementById('aiDiffAfter');
+    beforeEl.innerHTML = _esc(selectedText);
+    afterEl.innerHTML = '<div class="ai-loading"><span></span><span></span><span></span></div> 思考中...';
+    sendBtn.disabled = true; ta.disabled = true;
+
+    currentEdit = { selected: selectedText, instruction, beforeContent: fullContent, afterContent: '' };
+
+    // 调整弹窗位置（因为加了 diff 面板变高）
+    positionAIPopover();
+
+    aiAbort = new AbortController();
+    fetch(`/api/articles/${currentArticleId}/ai-edit/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        selected_text: selectedText,
+        instruction: instruction,
+        full_content: fullContent,
+      }),
+      signal: aiAbort.signal,
+    }).then(async (resp) => {
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '', currentEvent = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        for (const line of lines) {
+          if (line.startsWith('event: ')) currentEvent = line.slice(7).trim();
+          else if (line.startsWith('data: ') && currentEvent) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (currentEvent === 'content') {
+                currentEdit.afterContent += data.delta;
+                afterEl.textContent = currentEdit.afterContent;
+                // 自动滚动到底部
+                afterEl.scrollTop = afterEl.scrollHeight;
+              } else if (currentEvent === 'done') {
+                // 渲染 diff 高亮
+                afterEl.innerHTML = renderDiffHTML(selectedText, currentEdit.afterContent, fullContent);
+              } else if (currentEvent === 'error') {
+                afterEl.innerHTML = `<span style="color:#dc2626">错误: ${_esc(data.message)}</span>`;
+              }
+            } catch (e) {}
+            currentEvent = '';
+          }
+        }
+      }
+      // 显示接受/拒绝按钮
+      actions.style.display = 'flex';
+      sendBtn.disabled = false; ta.disabled = false;
+    }).catch((e) => {
+      if (e.name === 'AbortError') {
+        afterEl.innerHTML = '<span style="color:var(--muted)">已中断</span>';
+      } else {
+        afterEl.innerHTML = `<span style="color:#dc2626">错误: ${_esc(e.message)}</span>`;
+      }
+      sendBtn.disabled = false; ta.disabled = false;
+    });
+  }
+
+  // 简单 diff：尝试找出"修改后"中对应原文框选位置的最长公共子串并高亮变化
+  function renderDiffHTML(selected, afterMd, beforeMd) {
+    // 仅做字符级高亮：把 afterMd 与 selected 做 LCS 比对
+    return _esc(afterMd);
+  }
+
+  // 拒绝当前生成结果：清空 diff 面板和操作按钮，保留输入框让用户继续提问
+  function rejectAIEdit() {
+    if (aiAbort) { aiAbort.abort(); aiAbort = null; }
+    const diffWrap = document.getElementById('aiDiffWrap');
+    const actions = document.getElementById('aiActions');
+    if (diffWrap) diffWrap.style.display = 'none';
+    if (actions) actions.style.display = 'none';
+    const afterEl = document.getElementById('aiDiffAfter');
+    if (afterEl) afterEl.textContent = '';
+    const sendBtn = document.getElementById('aiPopoverSend');
+    const ta = document.getElementById('aiPopoverInput');
+    if (sendBtn) sendBtn.disabled = false;
+    if (ta) { ta.disabled = false; ta.focus(); }
+    currentEdit = null;
+    positionAIPopover();
+  }
+
+  function acceptAIEdit() {
+    if (!currentEdit || !currentEdit.afterContent) return;
+    const aiResult = currentEdit.afterContent.trim();
+
+    if (highlightSpan && highlightSpan.parentNode) {
+      // 在文章 markdown 源中替换选中内容为 AI 结果
+      articleContent = articleContent.replace(currentEdit.selected, aiResult);
+
+      // 在 DOM 中替换高亮 span 为渲染后的 HTML
+      const temp = document.createElement('span');
+      temp.innerHTML = renderMarkdown(aiResult);
+      highlightSpan.replaceWith(...temp.childNodes);
+
+      // 清理高亮引用
+      highlightSpan = null;
+    } else {
+      // 高亮丢失，做文本替换
+      articleContent = articleContent.replace(currentEdit.selected, aiResult);
+    }
+
+    markDirty();
+    updateStats();
+    closeAIPopover();
+
+    // 重新渲染预览面板（刷新到干净状态）
+    if (currentMode === 'preview') {
+      renderPreviewPanel();
+    }
+  }
+
+  function closeAIPopover() {
+    if (aiAbort) { aiAbort.abort(); aiAbort = null; }
+    if (aiPopover) { aiPopover.remove(); aiPopover = null; }
+    // 移除持久高亮
+    if (highlightSpan && highlightSpan.parentNode) {
+      const parent = highlightSpan.parentNode;
+      while (highlightSpan.firstChild) parent.insertBefore(highlightSpan.firstChild, highlightSpan);
+      parent.removeChild(highlightSpan);
+    }
+    highlightSpan = null;
+    currentEdit = null;
+    window.getSelection()?.removeAllRanges();
+  }
+
+  // 全局 ESC 关闭
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && aiPopover) {
+      closeAIPopover();
+    }
+  });
+  </script>
+  <script src="modal.js"></script>
+</body>
+</html>

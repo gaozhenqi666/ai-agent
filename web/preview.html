@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>文章预览 · Harness</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .app { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+    .main { background: var(--bg); }
+
+    .editor-single {
+      display: flex; flex-direction: column;
+      flex: 1; overflow: hidden;
+    }
+    .editor-scroll {
+      flex: 1; overflow-y: auto;
+      position: relative;
+    }
+    .editor-content {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 48px 56px 200px;
+      background: var(--surface);
+      min-height: 100%;
+      border-left: 1px solid var(--border);
+      border-right: 1px solid var(--border);
+      font-family: var(--font-mono);
+      font-size: 13.5px;
+      line-height: 1.85;
+      color: var(--ink);
+      position: relative;
+    }
+    .editor-content h1 { font-family: var(--font-display); font-size: 30px; font-weight: 500; margin: 24px 0 14px; letter-spacing: -0.02em; }
+    .editor-content h2 { font-family: var(--font-display); font-size: 20px; font-weight: 500; margin: 28px 0 10px; }
+    .editor-content h3 { font-size: 16px; font-weight: 600; margin: 20px 0 8px; }
+    .editor-content p { margin: 0 0 14px; }
+    .editor-content ul, .editor-content ol { padding-left: 24px; margin: 0 0 14px; }
+    .editor-content li { margin-bottom: 4px; }
+    .editor-content code {
+      font-family: var(--font-mono); font-size: 0.88em;
+      background: var(--bg-paper); padding: 2px 6px; border-radius: 4px;
+      border: 1px solid var(--border);
+    }
+    .editor-content pre {
+      background: var(--ink); color: #E5DFD3;
+      padding: 14px 16px; border-radius: var(--radius);
+      overflow-x: auto; font-size: 12.5px; line-height: 1.55;
+      margin: 14px 0;
+    }
+    .editor-content a { color: var(--accent); text-decoration: underline; }
+    .editor-content blockquote {
+      border-left: 3px solid var(--accent);
+      margin: 14px 0; padding: 8px 16px;
+      font-style: italic; color: var(--muted);
+    }
+    .editor-content hr { border: none; border-top: 1px solid var(--border); margin: 24px 0; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <main class="main" style="height: 100vh; overflow: hidden; display: flex; flex-direction: column;">
+
+      <!-- ============== Top bar (无编辑功能) ============== -->
+      <header class="pane-header" style="border-bottom: 1px solid var(--border); padding: 10px 20px;">
+        <a class="icon-btn" id="backBtn" href="knowledge.html" title="返回">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+        </a>
+        <div style="flex: 1; min-width: 0; display:flex; align-items:center; gap:10px;">
+          <span
+            id="articleTitle"
+            style="flex:1; font-family:var(--font-display); font-size:15px; font-weight:500; color:var(--ink); min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"
+          >加载中...</span>
+          <span class="status-badge published" id="statusLabel"><span class="dot"></span>只读</span>
+        </div>
+        <div style="width: 80px;"></div>
+      </header>
+
+      <!-- ============== Content ============== -->
+      <div class="editor-single">
+        <div class="editor-scroll">
+          <div class="editor-content" id="articleContent">
+            <div class="muted" style="text-align:center;padding:64px 0;font-size:13px;">加载中...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============== Status bar ============== -->
+      <div class="editor-status">
+        <span><span class="dot" style="background: var(--success);"></span>已同步 · 只读预览</span>
+        <span id="articleMeta">—</span>
+        <div style="flex:1"></div>
+        <span class="muted">知识库文章不支持编辑</span>
+      </div>
+
+    </main>
+  </div>
+
+  <script>
+  const API = '';
+
+  async function apiFetch(path, opts = {}) {
+    const resp = await fetch(API + path, {
+      headers: { 'Content-Type': 'application/json', ...opts.headers },
+      ...opts
+    });
+    const data = await resp.json();
+    console.log('[preview apiFetch]', path, 'status:', resp.status, 'data:', data);
+    if (!resp.ok) throw new Error(`API ${resp.status}: ${data.message || ''}`);
+    return data;
+  }
+
+  function _esc(s) {
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  async function loadArticle() {
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get('id');
+    const type = params.get('type') || 'article'; // 默认 article
+    if (!id) {
+      document.getElementById('articleContent').innerHTML = '<div style="text-align:center;padding:64px;font-size:14px;color:var(--muted-2);">未指定文章 ID</div>';
+      return;
+    }
+
+    try {
+      // 根据 type 选择 API
+      const apiPath = type === 'knowledge'
+        ? `/api/knowledge/articles/${id}`
+        : `/api/articles/${id}`;
+
+      const resp = await apiFetch(apiPath);
+      const a = resp.data || resp;
+
+      if (!a || (!a.article_id && !a.title)) {
+        document.getElementById('articleContent').innerHTML = '<div style="text-align:center;padding:64px;font-size:14px;color:var(--muted-2);">文章不存在</div>';
+        return;
+      }
+
+      // 根据来源设置返回链接
+      if (type === 'knowledge') {
+        document.getElementById('backBtn').href = 'knowledge.html';
+      } else {
+        document.getElementById('backBtn').href = 'articles.html';
+      }
+
+      document.title = `${a.title} · Harness`;
+      document.getElementById('articleTitle').textContent = a.title;
+
+      const date = a.updated_at || a.created_at;
+      document.getElementById('articleMeta').textContent =
+        `字数: ${(a.content || '').length} · ${new Date(date).toLocaleDateString('zh-CN')}`;
+
+      // 渲染内容（复用编辑器逻辑）
+      const contentEl = document.getElementById('articleContent');
+      if (a.content) {
+        const lines = a.content.split('\n');
+        let html = '';
+        for (const line of lines) {
+          if (line.trim() === '') { html += '<br>'; continue; }
+          if (line.startsWith('## ')) { html += `<h2>${_esc(line.slice(3))}</h2>`; continue; }
+          if (line.startsWith('# ')) { html += `<h1>${_esc(line.slice(2))}</h1>`; continue; }
+          if (line.startsWith('- ')) { html += `<li>${_esc(line.slice(2))}</li>`; continue; }
+          html += `<p>${_esc(line)}</p>`;
+        }
+        contentEl.innerHTML = html;
+      } else {
+        contentEl.innerHTML = '<div style="text-align:center;padding:64px;font-size:14px;color:var(--muted-2);">暂无内容</div>';
+      }
+    } catch (e) {
+      console.error('loadArticle error:', e);
+      document.getElementById('articleContent').innerHTML = `<div style="text-align:center;padding:64px;font-size:14px;color:#dc2626;">加载失败: ${_esc(e.message)}</div>`;
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', loadArticle);
+  </script>
+</body>
+</html>

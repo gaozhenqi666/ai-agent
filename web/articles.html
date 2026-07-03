@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>文章 · Harness</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .app { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+    .topbar-nav { display: flex; align-items: center; gap: 6px; }
+    .topbar-nav .nav-item { padding: 5px 10px; font-size: 12.5px; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <main class="main">
+
+      <header class="topbar">
+        <a href="index.html" style="display:flex; align-items:center;">
+          <svg width="26" height="26" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+            <rect width="32" height="32" rx="5" fill="#1C1A17"/>
+            <path d="M 3 17 C 7 7, 11 7, 15 17 C 19 27, 23 27, 27 17" stroke="white" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </a>
+        <div class="topbar-nav">
+          <a class="nav-item" href="index.html">对话</a>
+          <a class="nav-item" href="knowledge.html">知识库</a>
+          <a class="nav-item active" href="articles.html">文章</a>
+        </div>
+        <div style="flex:1"></div>
+        <button class="icon-btn" title="搜索文章">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </button>
+        <button class="btn btn-accent" disabled title="暂未开放">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          新增知识
+        </button>
+      </header>
+
+      <div class="knowledge-header">
+        <div class="knowledge-title-row">
+          <h1 class="knowledge-title">文章</h1>
+          <div class="search-box">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--muted);"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="text" placeholder="搜索文章标题或内容..." />
+            <kbd>⌘ K</kbd>
+          </div>
+        </div>
+
+        <div class="tag-row">
+          <button class="tag active" data-status="all">全部 <span class="count" id="cntAll">0</span></button>
+          <button class="tag" data-status="published">已发布 <span class="count" id="cntPublished">0</span></button>
+          <button class="tag" data-status="draft">草稿 <span class="count" id="cntDraft">0</span></button>
+        </div>
+      </div>
+
+      <div class="knowledge-body">
+
+        <div class="knowledge-stats" id="artStats">
+          <div class="stat"><strong>0</strong> 篇文章</div>
+        </div>
+
+        <div class="sort-row">
+          <span>排序:</span>
+          <button class="sort-btn active" onclick="setSort('updated')">最近编辑</button>
+          <button class="sort-btn" onclick="setSort('created')">最近创建</button>
+          <button class="sort-btn" onclick="setSort('title')">标题 A-Z</button>
+        </div>
+
+        <div class="article-list-wrap" id="articleList">
+          <div class="article-list-row head">
+            <div>标题</div>
+            <div>状态</div>
+            <div>标签</div>
+            <div>编辑时间</div>
+            <div style="text-align:right;">操作</div>
+          </div>
+          <div class="muted" style="padding:24px;text-align:center;font-size:13px;">加载中...</div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <script>
+  const API = '';
+  let currentSort = 'updated';
+  let currentStatus = 'all';
+  let allArticles = [];
+
+  async function apiFetch(path, opts = {}) {
+    const res = await fetch(API + path, {
+      headers: { 'Content-Type': 'application/json', ...opts.headers },
+      ...opts,
+    });
+    const data = await res.json();
+    if (data.code !== 0) throw new Error(data.message);
+    return data.data;
+  }
+
+  function _esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+  function _timeAgo(iso) {
+    const d = new Date(iso);
+    const diff = Date.now() - d.getTime();
+    if (diff < 60000) return '刚刚';
+    if (diff < 3600000) return `${Math.floor(diff/60000)} 分钟前`;
+    if (diff < 86400000) return `${Math.floor(diff/3600000)} 小时前`;
+    return d.toLocaleDateString('zh-CN');
+  }
+
+  function _statusBadge(status) {
+    const map = {
+      'published': '<span class="status-badge published"><span class="dot"></span>已发布</span>',
+      'draft': '<span class="status-badge draft"><span class="dot"></span>草稿</span>',
+    };
+    return map[status] || `<span class="status-badge ${status}">${_esc(status)}</span>`;
+  }
+
+  function renderList() {
+    const filtered = currentStatus === 'all'
+      ? allArticles
+      : allArticles.filter(a => a.status === currentStatus);
+
+    const container = document.getElementById('articleList');
+    if (!filtered.length) {
+      container.innerHTML = `<div class="article-list-row head"><div>标题</div><div>状态</div><div>标签</div><div>编辑时间</div><div style="text-align:right;">操作</div></div>
+        <div class="muted" style="padding:24px;text-align:center;font-size:13px;">还没有文章</div>`;
+      return;
+    }
+
+    let html = `<div class="article-list-row head"><div>标题</div><div>状态</div><div>标签</div><div>编辑时间</div><div style="text-align:right;">操作</div></div>`;
+    for (const a of filtered) {
+      const tags = (a.tags || []).map(t => `<span class="tag">${_esc(t)}</span>`).join(' ');
+      html += `
+        <div class="article-list-row-wrap">
+          <a class="article-list-row" href="editor.html?id=${a.article_id}">
+            <div class="article-list-title">
+              <svg class="doc-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              <span class="title">${_esc(a.title)}</span>
+            </div>
+            <div>${_statusBadge(a.status)}</div>
+            <div>${tags || '<span class="muted" style="font-size:11px">—</span>'}</div>
+            <div class="meta">${_timeAgo(a.updated_at)}</div>
+            <div style="text-align:right;">
+              <button class="row-delete-btn" onclick="event.preventDefault(); event.stopPropagation(); deleteArticle('${a.article_id}', '${_esc(a.title).replace(/'/g, "\\'")}')" title="删除文章">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+              </button>
+            </div>
+          </a>
+        </div>`;
+    }
+    container.innerHTML = html;
+  }
+
+  async function loadArticles() {
+    try {
+      const params = new URLSearchParams({ sort: currentSort, limit: '50' });
+      const data = await apiFetch(`/api/articles?${params}`);
+      allArticles = data.items || [];
+
+      // 更新计数
+      const cntAll = allArticles.length;
+      const cntPub = allArticles.filter(a => a.status === 'published').length;
+      const cntDraft = allArticles.filter(a => a.status === 'draft').length;
+      document.getElementById('cntAll').textContent = cntAll;
+      document.getElementById('cntPublished').textContent = cntPub;
+      document.getElementById('cntDraft').textContent = cntDraft;
+
+      // 更新顶部统计
+      document.getElementById('artStats').innerHTML = `
+        <div class="stat"><strong>${cntAll}</strong> 篇文章</div>
+        <div class="stat"><strong>${cntPub}</strong> 已发布</div>
+        <div class="stat"><strong>${cntDraft}</strong> 草稿</div>`;
+
+      renderList();
+    } catch (e) { console.error('loadArticles error:', e); }
+  }
+
+  function setSort(sort) {
+    currentSort = sort;
+    document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
+    event.target.classList.add('active');
+    loadArticles();
+  }
+
+  function setStatusFilter(status, btn) {
+    currentStatus = status;
+    document.querySelectorAll('.tag-row .tag').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderList();
+  }
+
+  // ========== Delete Article ==========
+  async function deleteArticle(articleId, title) {
+    const confirmed = await showConfirm({
+      title: '删除文章',
+      desc: `确定要删除文章「${title}」吗？此操作无法撤销。`,
+      type: 'danger',
+      confirmText: '删除',
+    });
+    if (!confirmed) return;
+
+    try {
+      await apiFetch(`/api/articles/${articleId}`, { method: 'DELETE' });
+      // 重新加载
+      await loadArticles();
+    } catch (e) {
+      console.error('deleteArticle error:', e);
+      showAlert({ title: '删除失败', desc: e.message, type: 'warning' });
+    }
+  }
+
+  // 绑定 filter 按钮
+  document.querySelectorAll('.tag-row .tag').forEach(btn => {
+    btn.addEventListener('click', () => setStatusFilter(btn.dataset.status, btn));
+  });
+
+  document.addEventListener('DOMContentLoaded', loadArticles);
+  </script>
+  <script src="modal.js"></script>
+</body>
+</html>
