@@ -27,21 +27,53 @@ def list_articles():
     limit = int(request.args.get("limit", 20))
     offset = int(request.args.get("offset", 0))
     status = request.args.get("status", "draft")
+    search = (request.args.get("search") or "").strip()
+    sort = request.args.get("sort", "updated")
 
-    rows = db_query(
-        """SELECT article_id, title, status, created_at, updated_at,
-                  SUBSTR(content, 1, 200) AS preview
-           FROM articles
-           WHERE status = ?
-           ORDER BY created_at DESC
-           LIMIT ? OFFSET ?""",
-        [status, limit, offset],
-    )
+    sql = """SELECT article_id, title, status, created_at, updated_at,
+                    SUBSTR(content, 1, 200) AS preview
+             FROM articles
+             WHERE 1=1"""
+    params = []
+    if status != "all":
+        sql += " AND status = ?"
+        params.append(status)
+    if search:
+        sql += " AND (title LIKE ? OR content LIKE ?)"
+        params.extend([f"%{search}%", f"%{search}%"])
+
+    if sort == "created":
+        sql += " ORDER BY created_at DESC"
+    elif sort == "title":
+        sql += " ORDER BY title COLLATE NOCASE ASC, updated_at DESC"
+    else:
+        sql += " ORDER BY updated_at DESC, created_at DESC"
+
+    sql += " LIMIT ? OFFSET ?"
+    params.extend([limit, offset])
+
+    rows = db_query(sql, params)
 
     return jsonify(ok({
         "total": len(rows),
         "items": [dict(r) for r in rows],
     }))
+
+
+@articles_bp.post("/api/articles")
+def create_article():
+    body = request.get_json(silent=True) or {}
+    title = (body.get("title") or "未命名文章").strip()[:200]
+    content = body.get("content") or "# 新文章\n\n"
+    status = body.get("status") or "draft"
+    article_id = new_id("art-")
+    now = now_iso()
+    db_exec(
+        """INSERT INTO articles (article_id, title, content, status, created_at, updated_at)
+           VALUES (?,?,?,?,?,?)""",
+        [article_id, title, content, status, now, now],
+    )
+    return jsonify(ok({"article_id": article_id, "title": title, "created_at": now})), 201
 
 
 @articles_bp.get("/api/articles/<article_id>")
@@ -115,6 +147,7 @@ def ai_edit_article_stream(article_id):
     """
     from flask import Response, stream_with_context
     from common import get_llm, Config, count_tokens, log
+    from tools.security_tool import detect_injection, sanitize_input, audit_output
 
     body = request.get_json(silent=True) or {}
     selected = (body.get("selected_text") or "").strip()
@@ -127,6 +160,12 @@ def ai_edit_article_stream(article_id):
         return jsonify(err(4004, "instruction 不能为空")), 400
     if not full_content:
         return jsonify(err(4005, "full_content 不能为空")), 400
+    if len(selected) > 4000 or len(instruction) > 1000 or len(full_content) > 50000:
+        return jsonify(err(4006, "输入过长，已触发编辑安全熔断")), 400
+
+    attack = detect_injection(instruction) or detect_injection(selected)
+    if attack:
+        return jsonify(err(4007, f"检测到危险指令：{attack['reason']}")), 400
 
     # 验证文章存在
     if not db_query_one("SELECT 1 FROM articles WHERE article_id=?", [article_id]):
@@ -152,7 +191,7 @@ def ai_edit_article_stream(article_id):
 {selected}
 
 【用户的修改指令】
-{instruction}
+{sanitize_input(instruction)}
 
 请直接输出修改后的框选内容。"""
 
@@ -173,6 +212,7 @@ def ai_edit_article_stream(article_id):
             )
 
             total_chars = 0
+            output_chunks: list[str] = []
             for chunk in stream:
                 try:
                     if chunk.choices and len(chunk.choices) > 0:
@@ -180,10 +220,17 @@ def ai_edit_article_stream(article_id):
                         if delta and delta.content:
                             text = delta.content
                             total_chars += len(text)
+                            output_chunks.append(text)
+                            if total_chars > 10000:
+                                raise RuntimeError("AI 编辑输出过长，已触发安全熔断")
                             yield f"event: content\ndata: {json_dumps_safe({'delta': text})}\n\n"
                 except Exception as e:
                     log.warning(f"[ai-edit] chunk 解析失败: {e}")
                     continue
+
+            audit = audit_output("".join(output_chunks))
+            if not audit["safe"]:
+                raise RuntimeError("AI 编辑结果触发安全审计，已拦截输出")
 
             yield f"event: done\ndata: {json_dumps_safe({'total_chars': total_chars})}\n\n"
         except Exception as e:

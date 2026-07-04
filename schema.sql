@@ -111,3 +111,63 @@ CREATE TABLE IF NOT EXISTS articles (
 );
 
 CREATE INDEX IF NOT EXISTS idx_articles_status ON articles(status, created_at DESC);
+
+
+-- ---------- 7. agent_tasks 后台任务追踪 ----------
+CREATE TABLE IF NOT EXISTS agent_tasks (
+    task_id          TEXT PRIMARY KEY,
+    session_id       TEXT,
+    trace_id         TEXT,
+    kind             TEXT NOT NULL DEFAULT 'chat',
+    status           TEXT NOT NULL DEFAULT 'running',      -- pending/running/completed/failed/cancelled
+    title            TEXT NOT NULL,
+    current_step     TEXT,
+    detail           TEXT,
+    progress_json    TEXT NOT NULL DEFAULT '[]',           -- [{key,label,status,detail,...}]
+    result_json      TEXT,
+    error_message    TEXT,
+    can_interrupt    INTEGER NOT NULL DEFAULT 1,
+    started_at       TEXT NOT NULL,
+    updated_at       TEXT NOT NULL,
+    finished_at      TEXT,
+    FOREIGN KEY (session_id) REFERENCES sessions(session_id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_tasks_status       ON agent_tasks(status, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_tasks_session      ON agent_tasks(session_id, updated_at DESC);
+
+
+-- ---------- 8. app_cache 轻量缓存 ----------
+CREATE TABLE IF NOT EXISTS app_cache (
+    cache_key        TEXT PRIMARY KEY,
+    scope            TEXT NOT NULL,
+    payload          TEXT NOT NULL,
+    expires_at       TEXT NOT NULL,
+    created_at       TEXT NOT NULL,
+    updated_at       TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_cache_scope        ON app_cache(scope, expires_at);
+
+
+-- ---------- 9. digest_subscriptions 定时文章订阅 ----------
+CREATE TABLE IF NOT EXISTS digest_subscriptions (
+    subscription_id   TEXT PRIMARY KEY,
+    email             TEXT NOT NULL,
+    query             TEXT NOT NULL,
+    schedule_cron     TEXT NOT NULL DEFAULT '0 9 * * *',
+    timezone          TEXT NOT NULL DEFAULT 'Asia/Shanghai',
+    max_results       INTEGER NOT NULL DEFAULT 5,
+    enabled           INTEGER NOT NULL DEFAULT 1,
+    send_to_feishu    INTEGER NOT NULL DEFAULT 1,
+    send_email        INTEGER NOT NULL DEFAULT 1,
+    tags_json         TEXT NOT NULL DEFAULT '[]',
+    last_run_at       TEXT,
+    last_status       TEXT,
+    last_error        TEXT,
+    created_at        TEXT NOT NULL,
+    updated_at        TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_digest_subscriptions_enabled
+    ON digest_subscriptions(enabled, updated_at DESC);

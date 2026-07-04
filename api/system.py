@@ -60,9 +60,12 @@ def system_config():
         "compress_ratio":   Config.CONTEXT_COMPRESS_RATIO,
         "keep_recent":      Config.CONTEXT_KEEP_RECENT,
         "features": {
-            "knowledge_base":  False,  # M2
-            "blog":            False,  # M3
-            "daily_report":    False,  # M4
+            "knowledge_base":  True,
+            "blog":            True,
+            "daily_report":    True,
+            "task_tracking":   True,
+            "semantic_search": True,
+            "digest_subscription": True,
         },
     }))
 

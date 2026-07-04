@@ -28,6 +28,8 @@ from api.sessions  import sessions_bp
 from api.knowledge import knowledge_bp
 from api.system    import system_bp
 from api.articles  import articles_bp
+from api.tasks     import tasks_bp
+from api.digest    import digest_bp
 
 # 静态前端目录
 WEB_DIR = ROOT / "web"
@@ -65,6 +67,8 @@ app.register_blueprint(sessions_bp)
 app.register_blueprint(knowledge_bp)
 app.register_blueprint(system_bp)
 app.register_blueprint(articles_bp)
+app.register_blueprint(tasks_bp)
+app.register_blueprint(digest_bp)
 
 
 # ---------- 3. 前端静态文件（默认 index.html） ----------

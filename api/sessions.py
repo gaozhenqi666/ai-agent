@@ -24,6 +24,7 @@ from flask import Blueprint, request, jsonify
 
 from common import *
 from common import log, ok, err, E, db_query, db_exec, new_id, now_iso, truncate
+from tools.task_tracker_tool import get_active_task, cancel_task
 
 sessions_bp = Blueprint("sessions", __name__)
 
@@ -354,6 +355,10 @@ def interrupt_session(session_id):
     if not last_user:
         return jsonify(ok({"cleaned": False, "reason": "没有可中断的任务"}))
 
+    active_task = get_active_task(session_id=session_id)
+    if active_task and active_task.get("can_interrupt"):
+        cancel_task(active_task["task_id"], reason="用户手动中断任务")
+
     # 收集 user 消息之后创建的 assistant 消息的 meta
     rows = db_query(
         """SELECT message_id, meta, role FROM messages
@@ -392,9 +397,14 @@ def interrupt_session(session_id):
 
     if not last_asst:
         # 流式被中断，还没有 assistant 消息 → 写入"任务已中断"
-        interrupted_content = "任务已中断"
+        interrupted_content = "任务已中断：用户手动停止了当前执行流程。"
         msg_id = new_id("msg-")
-        meta = json.dumps({"knowledge_ids": [], "article_ids": [], "interrupted": True}, ensure_ascii=False)
+        meta = json.dumps({
+            "knowledge_ids": [],
+            "article_ids": [],
+            "interrupted": True,
+            "interrupted_reason": "user_cancelled",
+        }, ensure_ascii=False)
         now = now_iso()
         db_exec(
             """INSERT INTO messages (message_id, session_id, role, content, trace_id, tokens, meta, created_at)
@@ -432,6 +442,7 @@ def interrupt_session(session_id):
         "cleaned_knowledge": cleaned_knowledge,
         "cleaned_articles": cleaned_articles,
         "interrupted_message_added": last_asst is None,
+        "active_task_id": active_task["task_id"] if active_task else None,
     }))
 
 

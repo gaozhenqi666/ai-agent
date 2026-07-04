@@ -18,6 +18,27 @@ import json
 import time
 import re
 import httpx
+from tools.agent_protocol_tool import (
+    build_kb_context_block,
+    normalize_knowledge_hits,
+    normalize_search_results,
+)
+from tools.article_request_tool import (
+    build_context_clarification,
+    build_clarification_payload,
+    build_refined_search_message,
+    detect_action_targets,
+    escape_markdown_text,
+    extract_requested_count,
+    has_explicit_search_intent,
+    is_count_refinement_request,
+    load_pending_article_clarification,
+    load_recent_search_contexts,
+    resolve_clarification_selection,
+    select_followup_context,
+)
+from tools.runtime_cache_tool import cache_get, cache_set
+from tools.task_tracker_tool import create_task, attach_task_to_message_meta
 from common import *  # 项目级基础库
 from common import (
     log, new_id, now_iso, count_tokens, count_messages_tokens,
@@ -122,6 +143,10 @@ def _search_tavily(query: str, max_results: int = 5) -> list[dict]:
     if not api_key:
         log.warning("[chat_agent] TAVILY_API_KEY 未配置，跳过搜索")
         return []
+    cache_key = json.dumps({"query": query, "max_results": max_results}, ensure_ascii=False, sort_keys=True)
+    cached = cache_get("tavily_search", cache_key)
+    if cached is not None:
+        return cached
 
     try:
         with httpx.Client(timeout=15.0) as client:
@@ -149,6 +174,7 @@ def _search_tavily(query: str, max_results: int = 5) -> list[dict]:
             "snippet": item.get("content", "")[:300],
         })
     log.info(f"[chat_agent] Tavily 搜索完成: {len(results)} 条结果，query={query!r}")
+    cache_set("tavily_search", cache_key, results, ttl_seconds=1800)
     return results
 
 
@@ -161,8 +187,6 @@ def _needs_search(message: str) -> bool:
         "最新", "新闻", "更新", "发布", "2024", "2025", "2026",
         "搜索", "搜", "找", "查", "链接", "URL",
         "search", "article", "paper", "blog", "tutorial", "latest",
-        "什么是", "怎么", "如何", "介绍", "对比", "比较", "vs",
-        "Transformer", "attention", "BERT", "GPT", "LLM", "RAG",
     ]
     msg_lower = message.lower()
     return any(kw.lower() in msg_lower for kw in search_keywords)
@@ -173,6 +197,14 @@ def _extract_urls(message: str) -> list[str]:
     import re
     url_pattern = r'https?://[^\s\)\]\"\'<>]+'
     return re.findall(url_pattern, message)
+
+
+def _is_explicit_save_to_knowledge_request(message: str) -> bool:
+    msg = (message or "").lower()
+    return bool(
+        re.search(r'(存|加入|存入|保存到|收藏到|收录到).{0,8}(知识库|knowledge)', msg)
+        or re.search(r'(知识库|knowledge).{0,8}(存|加入|收录)', msg)
+    )
 
 
 def _format_search_context(results: list[dict]) -> str:
@@ -191,6 +223,135 @@ def _format_search_context(results: list[dict]) -> str:
     lines.append("要求：推荐文章时必须给出上面的真实链接，格式：[标题](URL)")
     lines.append("=" * 50)
     return "\n".join(lines)
+
+
+def _should_use_kb(message: str, *, has_search_results: bool = False) -> bool:
+    """
+    只在需要“内部知识/经验上下文”的 Agent 路径接知识库。
+    - 纯搜索/最新资讯优先走联网
+    - 与个人知识库、工程实践、Agent/RAG 设计相关的问题优先接知识库
+    """
+    if not Config.KB_CHAT_ENABLED or has_search_results:
+        return False
+
+    msg = (message or "").lower()
+    no_kb_signals = [
+        "最新", "新闻", "最近", "today", "today's", "breaking",
+        "股价", "价格", "汇率", "天气", "比赛", "比分",
+        "推荐文章", "找文章", "搜文章", "搜索", "链接",
+    ]
+    if any(token in msg for token in no_kb_signals):
+        return False
+
+    kb_signals = [
+        "知识库", "我的文章", "我的知识", "个人知识",
+        "agent", "rag", "检索", "重排", "embedding", "向量",
+        "微服务", "缓存", "重试", "熔断", "api 设计", "api设计",
+        "系统设计", "架构", "sre", "安全", "owasp",
+    ]
+    question_signals = ["什么是", "怎么", "如何", "为什么", "区别", "设计", "实现", "优化"]
+    return any(token in msg for token in kb_signals) or any(token in msg for token in question_signals)
+
+
+def _analyze_article_request(message: str, session_id: str | None) -> dict:
+    text = (message or "").strip()
+    pending = load_pending_article_clarification(session_id)
+    if pending:
+        selected = resolve_clarification_selection(text, pending)
+        if selected:
+            context = selected["context"]
+            return {
+                "kind": "followup_action",
+                "context": context,
+                "search_query": context.get("search_query", ""),
+                "search_results": context.get("search_results", []),
+                "action_targets": selected.get("action_targets") or [],
+            }
+
+    action_targets = detect_action_targets(text)
+    explicit_search = has_explicit_search_intent(text)
+    requested_count = extract_requested_count(text)
+    contexts = load_recent_search_contexts(session_id) if session_id else []
+
+    if explicit_search:
+        return {
+            "kind": "new_search",
+            "plan_message": text,
+            "requested_count": requested_count,
+            "action_targets": sorted(action_targets),
+        }
+
+    if action_targets:
+        selected = select_followup_context(text, contexts)
+        if selected["status"] == "reuse":
+            context = selected["context"]
+            return {
+                "kind": "followup_action",
+                "context": context,
+                "search_query": context.get("search_query", ""),
+                "search_results": context.get("search_results", []),
+                "action_targets": sorted(action_targets),
+            }
+        if selected["status"] == "ambiguous":
+            return {
+                "kind": "clarify",
+                "message": build_context_clarification(selected.get("contexts", [])),
+                "payload": build_clarification_payload(selected.get("contexts", []), sorted(action_targets)),
+            }
+        return {
+            "kind": "clarify",
+            "message": "当前会话没有可用的文章结果。请先告诉我要搜索什么，或者直接说完整需求。",
+        }
+
+    if is_count_refinement_request(text):
+        selected = select_followup_context(text, contexts)
+        if selected["status"] == "reuse":
+            context = selected["context"]
+            return {
+                "kind": "new_search",
+                "plan_message": build_refined_search_message(text, context.get("search_query", "")),
+                "requested_count": requested_count,
+                "action_targets": [],
+            }
+        if selected["status"] == "ambiguous":
+            return {
+                "kind": "clarify",
+                "message": build_context_clarification(selected.get("contexts", [])),
+                "payload": build_clarification_payload(selected.get("contexts", []), []),
+            }
+
+    return {"kind": "default"}
+
+
+def _retrieve_kb_hits(query: str, top_k: int | None = None) -> list[dict]:
+    cache_key = json.dumps({
+        "query": query,
+        "top_k": top_k or Config.KB_CHAT_TOP_K,
+        "min_score": Config.KB_CHAT_MIN_SCORE,
+    }, ensure_ascii=False, sort_keys=True)
+    cached = cache_get("chat_kb_hits", cache_key)
+    if cached is not None:
+        return cached
+
+    try:
+        from tools.retriever_tool import hybrid_search
+        raw_hits = hybrid_search(
+            query=query,
+            top_k=top_k or Config.KB_CHAT_TOP_K,
+            vector_weight=0.55,
+            keyword_weight=0.45,
+            return_articles=True,
+        )
+    except Exception as e:
+        log.warning(f"[chat_agent] 知识库检索失败: {e}")
+        return []
+
+    hits = [
+        item for item in normalize_knowledge_hits(raw_hits)
+        if float(item.get("score") or 0.0) >= Config.KB_CHAT_MIN_SCORE
+    ]
+    cache_set("chat_kb_hits", cache_key, hits, ttl_seconds=600)
+    return hits
 
 
 # ---------- 0.6 文章操作：选择 + 三种操作（生成博客 / 存知识库 / 存飞书）----------
@@ -269,26 +430,36 @@ def _detect_article_operations(message: str, session_id: str) -> dict | None:
       {"operations": ["blog","knowledge","feishu"], "selected": [0,2], "all_results": [...], "query": "..."}
       或 None（不触发）
     """
-    # 获取上条 assistant 消息中的搜索结果
-    last_asst = db_query_one(
+    if re.search(r'(找|搜|搜索|查|推荐).{0,20}(文章|论文|资料|教程)', message):
+        return None
+
+    rows = db_query(
         """SELECT meta FROM messages
            WHERE session_id=? AND role='assistant'
-           ORDER BY created_at DESC LIMIT 1""",
+           ORDER BY created_at DESC LIMIT 8""",
         [session_id],
     )
-    if not last_asst or not last_asst.get("meta"):
+    meta = None
+    all_results = None
+    query = "搜索"
+    for row in rows:
+        raw_meta = row.get("meta")
+        if not raw_meta:
+            continue
+        try:
+            parsed = json.loads(raw_meta)
+        except Exception:
+            continue
+        candidate_results = parsed.get("search_results") or parsed.get("feishu_search_results")
+        if candidate_results:
+            meta = parsed
+            all_results = candidate_results
+            query = parsed.get("search_query") or parsed.get("feishu_search_query", "搜索")
+            break
+
+    if not meta or not all_results:
         return _check_no_results_fallback(message)
 
-    try:
-        meta = json.loads(last_asst["meta"])
-    except Exception:
-        return _check_no_results_fallback(message)
-
-    all_results = meta.get("search_results") or meta.get("feishu_search_results")
-    if not all_results:
-        return _check_no_results_fallback(message)
-
-    query = meta.get("search_query") or meta.get("feishu_search_query", "搜索")
     total = len(all_results)
     msg = message
 
@@ -334,8 +505,8 @@ def _scrape_for_ops(selected: list[dict]) -> tuple[list[dict], list[str], list[s
     共享工具：爬取选中文章的原文，供 blog/feishu 操作使用。
     返回 (enriched_results, failed_urls, failed_reasons)
     """
-    from agents.scraper import scrape_url
-    from agents.feishu_doc import _is_garbage_content
+    from tools.scraper_tool import scrape_url
+    from tools.feishu_doc_tool import _is_garbage_content
 
     enriched: list[dict] = []
     failed_urls: list[str] = []
@@ -373,29 +544,43 @@ def _scrape_for_ops(selected: list[dict]) -> tuple[list[dict], list[str], list[s
 
 
 def _execute_blog_op(selected: list[dict], query: str) -> str:
-    """基于爬取到的原文生成博客，爬不到内容则拒绝生成。"""
+    """基于爬取到的原文生成博客，爬不到内容则用搜索摘要兜底。"""
     if not selected:
         return "没有选中的文章，无法生成博客。"
 
-    # ⚠️ 必须先爬取原文，不能用 snippet
     enriched, failed_urls, failed_reasons = _scrape_for_ops(selected)
 
     valid = [r for r in enriched if not r.get("scrape_failed")]
+    use_snippet = False
     if not valid:
-        lines = ["所有文章都无法爬取，不能生成博客（会引发 AI 幻觉）:"] + failed_reasons
-        return "\n".join(lines)
-
-    # 用爬到的真实正文拼接素材
-    material = "\n\n---\n\n".join([
-        f"### {r['title']}\n{r.get('full_content', '')[:8000]}"
-        for r in valid[:3]  # 最多取3篇
-    ])
+        # 爬不到正文 → 用 search snippet 兜底
+        parts: list[str] = []
+        for r in selected[:5]:
+            title = r.get("title", "")
+            snippet = r.get("snippet", "")
+            url = r.get("url", "")
+            if not snippet:
+                continue
+            parts.append(f"### {title}\n> 来源: {url}\n\n{snippet[:1500]}")
+        if parts:
+            material = "\n\n---\n\n".join(parts)
+            use_snippet = True
+        else:
+            lines = ["所有文章都无法爬取，且无 snippet 可用:"] + failed_reasons
+            return "\n".join(lines)
+    else:
+        material = "\n\n---\n\n".join([
+            f"### {r['title']}\n{r.get('full_content', '')[:8000]}"
+            for r in valid[:3]
+        ])
 
     try:
+        from tools.article_request_tool import normalize_search_query
+        topic = normalize_search_query(query) or query[:30]
         blog_result = _generate_blog_from_content(
             content=material,
-            title=f"关于「{query}」的综合博客",
-            topic=query,
+            title=f"「{topic}」综合博客",
+            topic=topic,
         )
         if blog_result["success"]:
             article_id = new_id("art-")
@@ -405,8 +590,11 @@ def _execute_blog_op(selected: list[dict], query: str) -> str:
                    VALUES (?,?,?,?,?,?)""",
                 [article_id, blog_result["title"], blog_result["content"], "draft", now, now],
             )
-            msg = f"基于 {len(valid)} 篇文章生成博客完成！\n[{blog_result['title']}.md](editor.html?id={article_id})"
-            if failed_urls:
+            if use_snippet:
+                msg = f"所有文章均无法爬取，基于搜索摘要生成了博客！\n[{blog_result['title']}.md](editor.html?id={article_id})"
+            else:
+                msg = f"基于 {len(valid)} 篇文章生成博客完成！\n[{blog_result['title']}.md](editor.html?id={article_id})"
+            if not use_snippet and failed_urls:
                 msg += f"\n\n⚠️ 以下文章无法爬取，未纳入博客：\n" + "\n".join(failed_reasons)
             return msg
         else:
@@ -421,7 +609,7 @@ def _execute_knowledge_op(selected: list[dict]) -> str:
     if not selected:
         return "没有选中的文章。"
 
-    from agents.scraper import scrape_url
+    from tools.scraper_tool import scrape_url
 
     lines: list[str] = []
     success_count = 0
@@ -481,7 +669,7 @@ def _execute_feishu_op(selected: list[dict], query: str) -> str:
     enriched, failed_urls, failed_reasons = _scrape_for_ops(selected)
 
     try:
-        from agents.feishu_doc import save_search_to_feishu
+        from tools.feishu_doc_tool import save_search_to_feishu
         result = save_search_to_feishu(search_results=enriched, query=query)
         if result["success"]:
             msg = (
@@ -499,6 +687,38 @@ def _execute_feishu_op(selected: list[dict], query: str) -> str:
     except Exception as e:
         log.error(f"[chat_agent] 飞书操作异常: {e}")
         return f"保存到飞书时出错：{e}"
+
+
+def _execute_email_op(selected: list[dict], query: str, to: str = "") -> str:
+    """将选中文章推送到邮箱"""
+    if not selected:
+        return "没有选中的文章。"
+
+    try:
+        from agents.email_agent import send_email
+        from tools.article_request_tool import normalize_search_query
+
+        topic = normalize_search_query(query) or query[:30]
+        body = f"主题：{topic}\n\n找到 {len(selected)} 篇相关文章：\n\n"
+        for i, r in enumerate(selected):
+            title = r.get("title", "无标题")
+            url = r.get("url", "")
+            snippet = r.get("snippet", "")[:200]
+            body += f"{i + 1}. {title}\n   {url}\n   {snippet}\n\n"
+        body += "---\n此邮件由 Harness 自动生成，请勿回复。"
+
+        subject = f"Harness 推送 — 「{topic}」相关文章 ({len(selected)}篇)"
+        result = send_email(to=to or "3556045497@qq.com", subject=subject, body=body)
+
+        if result.get("success"):
+            return f"已推送到邮箱 {to or '3556045497@qq.com'}（{len(selected)} 篇文章）"
+        else:
+            return f"邮件推送失败：{result.get('error', '未知错误')}"
+    except ImportError:
+        return "邮件模块未找到，请确认 agents/email_agent.py 存在。"
+    except Exception as e:
+        log.error(f"[chat_agent] 邮件操作异常: {e}")
+        return f"邮件推送出错：{e}"
 
 
 def _execute_article_operations_stream(op_info: dict):
@@ -520,6 +740,8 @@ def _execute_article_operations_stream(op_info: dict):
             parts.append(_execute_knowledge_op(selected))
         elif op == "feishu":
             parts.append(_execute_feishu_op(selected, query))
+        elif op == "email":
+            parts.append(_execute_email_op(selected, query))
 
     yield {"event": "content", "data": {"delta": "\n\n".join(parts)}}
 
@@ -549,6 +771,8 @@ def _execute_article_operations(op_info: dict) -> str:
             parts.append(_execute_knowledge_op(selected))
         elif op == "feishu":
             parts.append(_execute_feishu_op(selected, query))
+        elif op == "email":
+            parts.append(_execute_email_op(selected, query))
 
     return "\n\n".join(parts)
 
@@ -839,7 +1063,7 @@ def _add_to_knowledge(article_info: dict) -> dict:
 
     # 复用 scraper 的内容验证逻辑
     try:
-        from agents.scraper import _validate_article_content
+        from tools.scraper_tool import _validate_article_content
         quality = _validate_article_content(content)
         if not quality["valid"]:
             log.warning(f"[chat_agent] ⚠️ 拒绝入库（{title}）：{quality['reason']}")
@@ -856,8 +1080,8 @@ def _add_to_knowledge(article_info: dict) -> dict:
     )
 
     try:
-        from agents.chunker import recursive_split
-        from agents.retriever import save_chunks
+        from tools.chunker_tool import recursive_split
+        from tools.retriever_tool import save_chunks
 
         article_id = new_id("art-")
         now = now_iso()
@@ -896,7 +1120,7 @@ def _generate_blog_from_content(content: str, title: str = "博客文章", topic
     """
     try:
         # 获取当前时间，让博客内容有时效性
-        from agents.time_tool import get_current_time
+        from tools.time_tool import get_current_time
         t = get_current_time()
         time_str = f"{t['date']} {t['weekday']}"
 
@@ -1000,7 +1224,7 @@ def handle_stream(message: str, session_id: str | None = None, trace_id: str | N
     knowledge_ids_created = []  # 本轮创建的知识库文章 ID
     article_ids_created = []    # 本轮创建的博客文章 ID
     try:
-        from agents.security import detect_injection, sanitize_input
+        from tools.security_tool import detect_injection, sanitize_input
         attack = detect_injection(message)
         if attack:
             log.warning(f"[chat_agent] ⚠️ 检测到提示词注入攻击: {attack}")
@@ -1030,15 +1254,78 @@ def handle_stream(message: str, session_id: str | None = None, trace_id: str | N
     except ImportError:
         log.warning("[chat_agent] security 模块未找到")
 
-    # 检测文章操作意图（生成博客 / 存知识库 / 存飞书）
-    op_info = _detect_article_operations(message, session_id)
-    if op_info:
-        if op_info.get("no_results"):
-            error_msg = "当前会话没有可用的搜索结果。请先让我搜索文章，比如「帮我搜索关于XXX的文章」，搜到后再说「存到飞书」。"
-            yield {"event": "start", "data": {"session_id": session_id}}
-            yield {"event": "content", "data": {"delta": error_msg}}
-            yield {"event": "done", "data": {}}
-            return
+    article_request = _analyze_article_request(message, session_id)
+    if article_request["kind"] == "clarify":
+        user_msg_id = new_id("msg-")
+        asst_msg_id = new_id("msg-")
+        user_tokens = count_tokens(message)
+        response_text = article_request["message"]
+        asst_tokens = count_tokens(response_text)
+        now = now_iso()
+        db_exec(
+            """INSERT INTO messages (message_id, session_id, role, content, trace_id, tokens, created_at)
+               VALUES (?,?,?,?,?,?,?)""",
+            [user_msg_id, session_id, "user", message, trace_id or new_id("trace-"), user_tokens, now],
+        )
+        db_exec(
+            """INSERT INTO messages (message_id, session_id, role, content, trace_id, tokens, meta, created_at)
+               VALUES (?,?,?,?,?,?,?,?)""",
+            [asst_msg_id, session_id, "assistant", response_text,
+             trace_id or new_id("trace-"), asst_tokens,
+             json.dumps({"pending_article_clarification": article_request.get("payload") or {}}, ensure_ascii=False),
+             now],
+        )
+        _update_session_activity(session_id, user_tokens + asst_tokens, 2)
+        yield {"event": "start", "data": {"session_id": session_id}}
+        yield {"event": "content", "data": {"delta": response_text}}
+        yield {"event": "done", "data": {"session_id": session_id, "assistant_message_id": asst_msg_id, "requires_clarification": True}}
+        return
+
+    plan_message = message
+    preloaded_search_results = None
+    source_query = message
+    if article_request["kind"] == "new_search":
+        plan_message = article_request.get("plan_message") or message
+    elif article_request["kind"] == "followup_action":
+        preloaded_search_results = article_request.get("search_results") or []
+        source_query = article_request.get("search_query") or message
+
+    # 检测是否应走 plan-executor（搜索 -> 飞书/知识库/博客）
+    try:
+        from tools.intent_classifier_tool import detect_intent_hybrid
+        intent_info = detect_intent_hybrid(plan_message)
+        from agents.master_agent import _should_plan
+        if article_request["kind"] == "new_search":
+            intent_info = {"intent": "search", "confidence": 1.0, "method": "article_request",
+                           "action_targets": article_request.get("action_targets", [])}
+            needs_planning = True
+        elif article_request["kind"] == "followup_action":
+            intent_info = {
+                "intent": "followup_action",
+                "confidence": 1.0,
+                "method": "article_request",
+                "source_query": source_query,
+                "action_targets": article_request.get("action_targets", []),
+            }
+            needs_planning = True
+        else:
+            needs_planning = _should_plan(plan_message, intent_info.get("intent", "chat"))
+    except Exception:
+        intent_info = {"intent": "chat"}
+        needs_planning = False
+
+    if needs_planning:
+        from agents.plan_executor_agent import PlanExecutor
+
+        task_id = create_task(
+            session_id=session_id,
+            trace_id=trace_id or new_id("trace-"),
+            kind="plan_execute",
+            title=message[:120],
+            detail="正在拆解并执行任务",
+            steps=[],
+        )
+
         user_msg_id = new_id("msg-")
         user_tokens = count_tokens(message)
         now = now_iso()
@@ -1048,26 +1335,86 @@ def handle_stream(message: str, session_id: str | None = None, trace_id: str | N
             [user_msg_id, session_id, "user", message, trace_id or new_id("trace-"), user_tokens, now],
         )
         _update_session_activity(session_id, user_tokens, 1)
+        yield {"event": "start", "data": {"session_id": session_id, "user_message_id": user_msg_id, "task_id": task_id}}
 
-        yield {"event": "start", "data": {"session_id": session_id, "user_message_id": user_msg_id}}
+        executor = PlanExecutor(session_id=session_id, trace_id=trace_id or new_id("trace-"), task_id=task_id)
+        steps = executor.plan(plan_message, intent_info)
 
-        result_msg = ""
-        for event in _execute_article_operations_stream(op_info):
-            if event["event"] == "content":
-                result_msg = event["data"]["delta"]
-                yield event
+        # 防御：plan() 返回空步骤但实际有 followup action + 搜索结果 → 直接生成博客
+        if not steps and article_request.get("kind") == "followup_action" and article_request.get("action_targets"):
+            action_targets = article_request.get("action_targets", [])
+            if "blog" in action_targets and preloaded_search_results:
+                from agents.plan_executor_agent import PlanStep
+                steps = [PlanStep(
+                    step_id=0, agent="blog", action="generate_blog",
+                    params={"query": source_query},
+                    needs_content=True,
+                    description="基于已有搜索结果生成博客",
+                )]
+                log.info(f"[chat_agent] plan() 返回空步骤，手动注入 blog step")
 
+        if preloaded_search_results and steps:
+            executor.step_results[-1] = {
+                "search_results": preloaded_search_results,
+                "query": source_query,
+            }
+            steps[0].params["query"] = source_query
+            steps[0].params["search_results"] = preloaded_search_results
+        exec_result = executor.execute(steps)
+        search_results_meta = []
+
+        if exec_result["success"]:
+            parts = []
+            latest_search_result = None
+            rendered_parts = []
+            for s in exec_result.get("steps", []):
+                if s.get("status") != "done":
+                    continue
+                r = s.get("result", {})
+                if r.get("message"):
+                    rendered_parts.append(r["message"])
+                elif r.get("doc_url"):
+                    rendered_parts.append(f"已保存到飞书：[{r['doc_url']}]({r['doc_url']})")
+                elif r.get("url"):
+                    rendered_parts.append(f"已生成结果：[{r.get('title', '打开查看')}]({r['url']})")
+                elif r.get("search_results"):
+                    latest_search_result = r
+            if latest_search_result:
+                search_results_meta = latest_search_result.get("search_results", [])
+                lines = [f"找到 {latest_search_result.get('count', len(latest_search_result['search_results']))} 条相关文章："]
+                for idx, item in enumerate(latest_search_result.get("search_results", [])[:5], 1):
+                    title = item.get("title") or "未命名"
+                    url = item.get("url") or ""
+                    snippet = escape_markdown_text(item.get("snippet") or "")
+                    line = f"{idx}. [{title}]({url})" if url else f"{idx}. {title}"
+                    if snippet:
+                        line += f"\n   {snippet[:120]}"
+                    lines.append(line)
+                parts.append("\n".join(lines))
+            parts.extend(rendered_parts)
+            response_text = "\n\n".join(parts) if parts else "操作完成"
+        else:
+            response_text = f"操作失败：{exec_result.get('error', '未知错误')}"
+
+        yield {"event": "content", "data": {"delta": response_text}}
         asst_msg_id = new_id("msg-")
-        asst_tokens = count_tokens(result_msg)
+        asst_tokens = count_tokens(response_text)
+        meta_sides = attach_task_to_message_meta({
+            "plan_result": exec_result,
+            "search_query": plan_message if search_results_meta else None,
+            "search_results": search_results_meta if search_results_meta else None,
+        }, task_id)
         db_exec(
             """INSERT INTO messages (message_id, session_id, role, content, trace_id, tokens, meta, created_at)
                VALUES (?,?,?,?,?,?,?,?)""",
-            [asst_msg_id, session_id, "assistant", result_msg,
+            [asst_msg_id, session_id, "assistant", response_text,
              trace_id or new_id("trace-"), asst_tokens,
-             json.dumps({"article_ops": op_info["operations"]}, ensure_ascii=False), now],
+             json.dumps(meta_sides, ensure_ascii=False), now_iso()],
         )
         _update_session_activity(session_id, asst_tokens, 1)
-        yield {"event": "done", "data": {"session_id": session_id, "assistant_message_id": asst_msg_id}}
+        if auto_title:
+            _auto_title(session_id, plan_message)
+        yield {"event": "done", "data": {"session_id": session_id, "assistant_message_id": asst_msg_id, "task_id": task_id}}
         return
 
     # 写用户消息
@@ -1083,23 +1430,30 @@ def handle_stream(message: str, session_id: str | None = None, trace_id: str | N
 
     # 构造 LLM 输入
     history = _load_history(session_id, Config.CONTEXT_WINDOW_TOKENS)
-    search_results = []
+    search_results: list[dict] = []
     search_context = ""
+    kb_context = ""
+    kb_hits: list[dict] = []
 
     if _needs_search(message):
         try:
-            search_results = _search_tavily(message)
+            search_results = normalize_search_results(_search_tavily(message))
             if search_results:
                 search_context = _format_search_context(search_results)
                 log.info(f"[chat_agent] 流式搜索到 {len(search_results)} 条结果")
         except Exception as e:
             log.warning(f"[chat_agent] 流式搜索失败: {e}")
+    elif _should_use_kb(message):
+        kb_hits = _retrieve_kb_hits(message)
+        if kb_hits:
+            kb_context = build_kb_context_block(kb_hits)
+            log.info(f"[chat_agent] 流式知识库命中 {len(kb_hits)} 条")
 
     system_content = SYSTEM_PROMPT
 
     # 注入当前时间（让 agent 知道今天是几号）
     try:
-        from agents.time_tool import get_current_context
+        from tools.time_tool import get_current_context
         system_content += f"\n\n{get_current_context()}"
     except Exception as e:
         log.warning(f"[chat_agent] 获取时间失败: {e}")
@@ -1107,6 +1461,9 @@ def handle_stream(message: str, session_id: str | None = None, trace_id: str | N
     if search_context:
         system_content += f"\n\n[实时搜索结果]\n{search_context}"
         log.info(f"[chat_agent] 搜索结果已注入 system prompt，长度: {len(search_context)}")
+    if kb_context:
+        system_content += f"\n\n[个人知识库]\n{kb_context}"
+        log.info(f"[chat_agent] 知识库结果已注入 system prompt，长度: {len(kb_context)}")
 
     messages = [{"role": "system", "content": system_content}] + history + [
         {"role": "user", "content": message}
@@ -1138,10 +1495,11 @@ def handle_stream(message: str, session_id: str | None = None, trace_id: str | N
     history_for_detect = history + [{"role": "user", "content": message}]
     url_processed = False  # 标记 URL 是否已处理（避免重复加入知识库）
 
-    # 检测 URL：如果有 URL，自动爬取并存入知识库
+    # 检测 URL：只有用户明确要求存知识库时才入库，避免隐式副作用
     urls = _extract_urls(message)
-    if urls:
-        from agents.scraper import scrape_url
+    explicit_save_to_kb = _is_explicit_save_to_knowledge_request(message)
+    if urls and explicit_save_to_kb:
+        from tools.scraper_tool import scrape_url
         url_processed = True  # 标记：URL 已经被处理
 
         # 去重 + 同域名只爬一次（避免对 OpenAI 官网等连续试镜像）
@@ -1237,7 +1595,7 @@ def handle_stream(message: str, session_id: str | None = None, trace_id: str | N
                 }}
             # 情况2：需要先爬取
             elif add_info.get("_needs_scrape"):
-                from agents.scraper import scrape_url
+                from tools.scraper_tool import scrape_url
                 target_url = add_info["_scrape_url"]
                 log.info(f"[chat_agent] 加入知识库需要先爬取: {target_url}")
 
@@ -1380,6 +1738,8 @@ def handle_stream(message: str, session_id: str | None = None, trace_id: str | N
         "article_ids": article_ids_created,
         "search_results": search_results if search_results else None,
         "search_query": message if search_results else None,
+        "knowledge_hits": kb_hits if kb_hits else None,
+        "knowledge_query": message if kb_hits else None,
     }, ensure_ascii=False)
     db_exec(
         """INSERT INTO messages (message_id, session_id, role, content, trace_id, tokens, meta, created_at)
@@ -1421,7 +1781,7 @@ def handle(message: str, session_id: str | None = None, trace_id: str | None = N
 
     # 3.1.5 安全检查
     try:
-        from agents.security import detect_injection, sanitize_input
+        from tools.security_tool import detect_injection, sanitize_input
         attack = detect_injection(message)
         if attack:
             log.warning(f"[chat_agent] ⚠️ 检测到提示词注入攻击: {attack}")
@@ -1435,43 +1795,33 @@ def handle(message: str, session_id: str | None = None, trace_id: str | None = N
     except ImportError:
         log.warning("[chat_agent] security 模块未找到")
 
-    # 检测文章操作意图（生成博客 / 存知识库 / 存飞书）
-    op_info = _detect_article_operations(message, session_id)
-    if op_info:
-        if op_info.get("no_results"):
-            return {
-                "session_id": session_id,
-                "response": "当前会话没有可用的搜索结果。请先让我搜索文章，比如「帮我搜索关于XXX的文章」，搜到后再说「存到飞书」。",
-            }
+    article_request = _analyze_article_request(message, session_id)
+    if article_request["kind"] == "clarify":
         now = now_iso()
         user_msg_id = new_id("msg-")
+        asst_msg_id = new_id("msg-")
         user_tokens = count_tokens(message)
+        asst_tokens = count_tokens(article_request["message"])
         db_exec(
             """INSERT INTO messages (message_id, session_id, role, content, trace_id, tokens, created_at)
                VALUES (?,?,?,?,?,?,?)""",
             [user_msg_id, session_id, "user", message, trace_id or new_id("trace-"), user_tokens, now],
         )
-        _update_session_activity(session_id, user_tokens, 1)
-
-        result_msg = _execute_article_operations(op_info)
-
-        asst_msg_id = new_id("msg-")
-        asst_tokens = count_tokens(result_msg)
         db_exec(
             """INSERT INTO messages (message_id, session_id, role, content, trace_id, tokens, meta, created_at)
                VALUES (?,?,?,?,?,?,?,?)""",
-            [asst_msg_id, session_id, "assistant", result_msg,
+            [asst_msg_id, session_id, "assistant", article_request["message"],
              trace_id or new_id("trace-"), asst_tokens,
-             json.dumps({"article_ops": op_info["operations"]}, ensure_ascii=False), now],
+             json.dumps({"pending_article_clarification": article_request.get("payload") or {}}, ensure_ascii=False),
+             now],
         )
-        _update_session_activity(session_id, asst_tokens, 1)
+        _update_session_activity(session_id, user_tokens + asst_tokens, 2)
         return {
             "session_id": session_id,
             "user_message_id": user_msg_id,
             "assistant_message_id": asst_msg_id,
-            "response": result_msg,
-            "usage": {"prompt_tokens": user_tokens, "completion_tokens": asst_tokens, "total_tokens": user_tokens + asst_tokens},
-            "duration_ms": int((time.time() - t0) * 1000),
+            "response": article_request["message"],
+            "requires_clarification": True,
         }
 
     # 3.2 加载历史
@@ -1479,20 +1829,27 @@ def handle(message: str, session_id: str | None = None, trace_id: str | None = N
 
     # 3.3 联网搜索（如果需要）
     search_context = ""
-    search_results = []
+    search_results: list[dict] = []
+    kb_context = ""
+    kb_hits: list[dict] = []
     if _needs_search(message):
         log.info(f"[chat_agent] 检测到需要搜索，query={message[:50]}")
-        search_results = _search_tavily(message)
+        search_results = normalize_search_results(_search_tavily(message))
         if search_results:
             search_context = _format_search_context(search_results)
             log.info(f"[chat_agent] 搜索到 {len(search_results)} 条结果")
+    elif _should_use_kb(message):
+        kb_hits = _retrieve_kb_hits(message)
+        if kb_hits:
+            kb_context = build_kb_context_block(kb_hits)
+            log.info(f"[chat_agent] 知识库命中 {len(kb_hits)} 条")
 
     # 3.4 构造 LLM 输入
     system_content = SYSTEM_PROMPT
 
     # 注入当前时间（让 agent 知道今天是几号）
     try:
-        from agents.time_tool import get_current_context
+        from tools.time_tool import get_current_context
         system_content += f"\n\n{get_current_context()}"
     except Exception as e:
         log.warning(f"[chat_agent] 获取时间失败: {e}")
@@ -1500,6 +1857,9 @@ def handle(message: str, session_id: str | None = None, trace_id: str | None = N
     if search_context:
         system_content += f"\n\n[实时搜索结果]\n{search_context}"
         log.info(f"[chat_agent] 搜索结果已注入 system prompt，长度: {len(search_context)}")
+    if kb_context:
+        system_content += f"\n\n[个人知识库]\n{kb_context}"
+        log.info(f"[chat_agent] 知识库结果已注入 system prompt，长度: {len(kb_context)}")
 
     messages = [{"role": "system", "content": system_content}] + history + [
         {"role": "user", "content": message}
@@ -1535,10 +1895,11 @@ def handle(message: str, session_id: str | None = None, trace_id: str | None = N
     history_for_detect = history + [{"role": "user", "content": message}]
     url_processed = False  # 标记 URL 是否已处理（避免重复加入知识库）
 
-    # 检测 URL：如果有 URL，自动爬取并存入知识库
+    # 检测 URL：只有用户明确要求存知识库时才入库，避免隐式副作用
     urls = _extract_urls(message)
-    if urls:
-        from agents.scraper import scrape_url
+    explicit_save_to_kb = _is_explicit_save_to_knowledge_request(message)
+    if urls and explicit_save_to_kb:
+        from tools.scraper_tool import scrape_url
         url_processed = True  # 标记：URL 已经被处理
 
         # 去重 + 同域名只爬一次
@@ -1593,7 +1954,7 @@ def handle(message: str, session_id: str | None = None, trace_id: str | None = N
             extra_actions.append(f"⚠️ {add_info.get('_reason', '缺少内容源')}")
         # 情况2：需要爬取
         elif add_info.get("_needs_scrape"):
-            from agents.scraper import scrape_url
+            from tools.scraper_tool import scrape_url
             target_url = add_info["_scrape_url"]
             log.info(f"[chat_agent] 加入知识库需要先爬取: {target_url}")
             scrape_result = scrape_url(target_url)
@@ -1711,6 +2072,8 @@ def handle(message: str, session_id: str | None = None, trace_id: str | None = N
             "article_ids": article_ids_created,
             "search_results": search_results if search_results else None,
             "search_query": message if search_results else None,
+            "knowledge_hits": kb_hits if kb_hits else None,
+            "knowledge_query": message if kb_hits else None,
         }, ensure_ascii=False)
         db_exec(
             """INSERT INTO messages (message_id, session_id, role, content, trace_id, tokens, meta, created_at)
@@ -1741,7 +2104,7 @@ def handle(message: str, session_id: str | None = None, trace_id: str | None = N
         "user_message_id":     user_msg_id,
         "assistant_message_id":asst_msg_id,
         "response":            assistant_content,
-        "articles":            [],   # M2 知识库检索结果（M1 留空）
+        "articles":            kb_hits,
         "actions":             [],   # M3 博客/早报建议（M1 留空）
         "usage":               usage,
         "duration_ms":         duration_ms,

@@ -41,6 +41,13 @@
       overflow-x: auto; font-size: 12.5px; line-height: 1.55;
       margin: 14px 0;
     }
+    .editor-panel pre code {
+      color: #F6EFE4;
+      background: transparent;
+      border: none;
+      padding: 0;
+      font-size: inherit;
+    }
     .editor-panel a { color: var(--accent); text-decoration: underline; }
     .editor-panel blockquote {
       border-left: 3px solid var(--accent);
@@ -371,11 +378,16 @@
   }
 
   // ====== 渲染 Markdown ======
+  function normalizeMarkdownForPreview(md) {
+    return String(md || '')
+      .replace(/^(#{1,6})([^\s#])/gm, '$1 $2');
+  }
+
   function renderMarkdown(md) {
     if (!md) return '<p class="muted" style="text-align:center;padding:64px 0;">（无内容）</p>';
     try {
       if (typeof marked !== 'undefined' && marked.parse) {
-        return marked.parse(md);
+        return marked.parse(normalizeMarkdownForPreview(md));
       }
     } catch (e) { console.error('marked parse error:', e); }
     return _esc(md).replace(/\n/g, '<br>');
@@ -475,6 +487,10 @@
     });
     panel.appendChild(ta);
     ta.focus();
+    requestAnimationFrame(() => {
+      ta.scrollTop = 0;
+      document.getElementById('editorScroll').scrollTop = 0;
+    });
   }
 
   // ====== 加载文章 ======
@@ -574,6 +590,10 @@
         '<div class="muted" style="text-align:center;padding:64px 0;">未指定文章 ID</div>';
     }
     initAISelectionWatcher();
+    // 滚动时重定位覆盖层
+    window.addEventListener('scroll', () => {
+      if (highlightOverlays.length > 0) repositionHighlightOverlays();
+    }, { passive: true });
   });
 
   // ============================================================
@@ -582,8 +602,9 @@
   let aiPopover = null;
   let aiBubble = null;
   let aiAbort = null;
-  let currentEdit = null;   // {selected, instruction, beforeContent, afterContent, savedRange}
-  let highlightSpan = null;  // 持久高亮元素
+  let currentEdit = null;   // {selected, instruction, beforeContent, afterContent}
+  let highlightOverlays = [];  // 选区覆盖层（不打标签，纯视觉）
+  let savedSelectionRange = null;  // 保存的选区 range
 
   function initAISelectionWatcher() {
     // 监听面板内文本框选（contenteditable 模式下）
@@ -614,13 +635,15 @@
       aiBubble = document.createElement('div');
       aiBubble.className = 'ai-selection-bubble';
       aiBubble.innerHTML = `<span class="ai-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L9 9l-7 1 5 5-1 7 6-3 6 3-1-7 5-5-7-1z"/></svg></span><span>AI 编辑</span>`;
-      aiBubble.addEventListener('mousedown', (e) => {
-        e.preventDefault();
-        const selText = sel.toString();
-        openAIPopover(selText);
-      });
       document.body.appendChild(aiBubble);
     }
+    // 每次框选用 onmousedown 覆盖旧监听，确保点击时获取最新选区
+    aiBubble.onmousedown = (e) => {
+      e.preventDefault();
+      const currentSel = window.getSelection();
+      const selText = (currentSel && !currentSel.isCollapsed) ? currentSel.toString().trim() : '';
+      if (selText) openAIPopover(selText);
+    };
     const range = sel.getRangeAt(0).getBoundingClientRect();
     aiBubble.style.left = (range.left + range.width / 2 - 40) + 'px';
     aiBubble.style.top = (range.top - 36) + 'px';
@@ -634,26 +657,17 @@
   function openAIPopover(selectedText) {
     if (aiPopover) aiPopover.remove();
 
-    // 保存选区范围（用于持久高亮）
+    // 保存选区（定位 + 覆盖层用）
     const sel = window.getSelection();
-    let savedRange = null;
+    let savedRect = null;
     if (sel && sel.rangeCount > 0) {
-      savedRange = sel.getRangeAt(0).cloneRange();
-    }
-
-    // 用 mark 标签包裹选中文字，保持高亮
-    if (savedRange && !savedRange.collapsed) {
-      highlightSpan = document.createElement('mark');
-      highlightSpan.className = 'ai-highlight';
-      highlightSpan.style.cssText = 'background:#fef08a;padding:1px 0;border-radius:2px;';
-      try {
-        savedRange.surroundContents(highlightSpan);
-      } catch (e) {
-        // 跨节点选区可能失败，忽略
-        highlightSpan = null;
-      }
+      savedSelectionRange = sel.getRangeAt(0).cloneRange();
+      savedRect = savedSelectionRange.getBoundingClientRect();
       sel.removeAllRanges();
     }
+
+    // 用浮动覆盖层保持"框选区域常亮"（不打标签到 DOM 里）
+    renderHighlightOverlays();
 
     // 收集当前完整 markdown
     const fullContent = articleContent;
@@ -695,7 +709,7 @@
         </button>
       </div>`;
     document.body.appendChild(aiPopover);
-    positionAIPopover();
+    positionAIPopover(savedRect);
 
     // 绑定事件
     const ta = aiPopover.querySelector('#aiPopoverInput');
@@ -711,29 +725,87 @@
     ta.focus();
   }
 
-  function positionAIPopover() {
+  function positionAIPopover(savedRect) {
     if (!aiPopover) return;
     const sel = window.getSelection();
-    if (sel && !sel.isCollapsed) {
-      const range = sel.getRangeAt(0).getBoundingClientRect();
+    let rect = savedRect;
+    // 如果没有传入 savedRect，尝试从当前选区获取
+    if (!rect && sel && !sel.isCollapsed) {
+      rect = sel.getRangeAt(0).getBoundingClientRect();
+    }
+    if (!rect && highlightOverlays.length) {
+      const r = highlightOverlays[0].getBoundingClientRect();
+      if (r.width > 0 || r.height > 0) rect = r;
+    }
+    if (rect) {
       const pop = aiPopover;
       pop.style.display = 'flex';
       const w = pop.offsetWidth, h = pop.offsetHeight;
       const vw = window.innerWidth, vh = window.innerHeight;
-      let left = range.left + range.width / 2 - w / 2;
-      let top = range.bottom + 8;
+      let left = rect.left + rect.width / 2 - w / 2;
+      let top = rect.bottom + 8;
       if (left < 8) left = 8;
       if (left + w > vw - 8) left = vw - w - 8;
-      if (top + h > vh - 8) top = range.top - h - 8;
+      if (top + h > vh - 8) top = rect.top - h - 8;
       pop.style.left = left + 'px';
       pop.style.top = top + 'px';
     } else {
-      // 居中
+      // 居中兜底
       const pop = aiPopover;
       pop.style.display = 'flex';
       const w = pop.offsetWidth, h = pop.offsetHeight;
       pop.style.left = (window.innerWidth - w) / 2 + 'px';
-      pop.style.top = (120) + 'px';
+      pop.style.top = '120px';
+    }
+  }
+
+  // ---------- 选区覆盖层（不打标签，纯 CSS 视觉，框选哪里就哪里亮）----------
+  function renderHighlightOverlays() {
+    removeHighlightOverlays();
+    if (!savedSelectionRange) return;
+    const rects = savedSelectionRange.getClientRects();
+    for (let i = 0; i < rects.length; i++) {
+      const r = rects[i];
+      if (r.width === 0 && r.height === 0) continue;
+      const overlay = document.createElement('div');
+      overlay.className = 'ai-selection-overlay';
+      overlay.style.cssText = [
+        'position:fixed',
+        `left:${r.left}px`, `top:${r.top}px`,
+        `width:${r.width}px`, `height:${r.height}px`,
+        'background:rgba(254,232,138,0.55)',
+         'outline:2px solid #f59e0b',
+         'outline-offset:1px',
+        'pointer-events:none',
+        'z-index:10',
+        'border-radius:2px',
+      ].join(';');
+      overlay.dataset.rectIndex = i;
+      document.body.appendChild(overlay);
+      highlightOverlays.push(overlay);
+    }
+  }
+
+  function removeHighlightOverlays() {
+    highlightOverlays.forEach(el => el.remove());
+    highlightOverlays = [];
+  }
+
+  function repositionHighlightOverlays() {
+    if (!savedSelectionRange || highlightOverlays.length === 0) return;
+    const rects = savedSelectionRange.getClientRects();
+    let idx = 0;
+    for (let i = 0; i < rects.length; i++) {
+      const r = rects[i];
+      if (r.width === 0 && r.height === 0) continue;
+      if (idx < highlightOverlays.length) {
+        const el = highlightOverlays[idx];
+        el.style.left = r.left + 'px';
+        el.style.top = r.top + 'px';
+        el.style.width = r.width + 'px';
+        el.style.height = r.height + 'px';
+        idx++;
+      }
     }
   }
 
@@ -845,27 +917,14 @@
     if (!currentEdit || !currentEdit.afterContent) return;
     const aiResult = currentEdit.afterContent.trim();
 
-    if (highlightSpan && highlightSpan.parentNode) {
-      // 在文章 markdown 源中替换选中内容为 AI 结果
-      articleContent = articleContent.replace(currentEdit.selected, aiResult);
-
-      // 在 DOM 中替换高亮 span 为渲染后的 HTML
-      const temp = document.createElement('span');
-      temp.innerHTML = renderMarkdown(aiResult);
-      highlightSpan.replaceWith(...temp.childNodes);
-
-      // 清理高亮引用
-      highlightSpan = null;
-    } else {
-      // 高亮丢失，做文本替换
-      articleContent = articleContent.replace(currentEdit.selected, aiResult);
-    }
+    // 在文章 markdown 源中替换选中内容为 AI 结果
+    articleContent = articleContent.replace(currentEdit.selected, aiResult);
 
     markDirty();
     updateStats();
     closeAIPopover();
 
-    // 重新渲染预览面板（刷新到干净状态）
+    // 重新渲染预览面板
     if (currentMode === 'preview') {
       renderPreviewPanel();
     }
@@ -874,13 +933,8 @@
   function closeAIPopover() {
     if (aiAbort) { aiAbort.abort(); aiAbort = null; }
     if (aiPopover) { aiPopover.remove(); aiPopover = null; }
-    // 移除持久高亮
-    if (highlightSpan && highlightSpan.parentNode) {
-      const parent = highlightSpan.parentNode;
-      while (highlightSpan.firstChild) parent.insertBefore(highlightSpan.firstChild, highlightSpan);
-      parent.removeChild(highlightSpan);
-    }
-    highlightSpan = null;
+    removeHighlightOverlays();
+    savedSelectionRange = null;
     currentEdit = null;
     window.getSelection()?.removeAllRanges();
   }

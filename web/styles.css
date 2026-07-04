@@ -1440,10 +1440,12 @@ body {
 
 /* ---------- Markdown body（AI 回复渲染） ---------- */
 .markdown-body {
+  font-family: var(--font-body);
   font-size: 13.5px;
   line-height: 1.75;
   color: var(--ink);
   word-wrap: break-word;
+  overflow-wrap: anywhere;
 }
 .markdown-body h1, .markdown-body h2, .markdown-body h3 {
   font-family: var(--font-display);
@@ -1454,6 +1456,7 @@ body {
 .markdown-body h2 { font-size: 19px; font-weight: 500; }
 .markdown-body h3 { font-size: 16px; font-weight: 600; }
 .markdown-body p { margin: 0 0 12px; }
+.markdown-body p:first-child { margin-top: 0; }
 .markdown-body ul, .markdown-body ol {
   padding-left: 22px;
   margin: 0 0 12px;
@@ -1465,6 +1468,13 @@ body {
   text-decoration: underline;
   text-underline-offset: 2px;
   transition: color 0.15s;
+  display: inline-flex;
+  max-width: min(100%, 42ch);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+  align-items: baseline;
 }
 .markdown-body a:hover { color: var(--accent-hover); }
 .markdown-body strong { font-weight: 600; color: var(--ink); }
@@ -1625,6 +1635,7 @@ body {
   gap: 8px;
   margin: 8px 0 12px;
   max-width: 680px;
+  transition: opacity 0.2s ease, transform 0.2s ease;
 }
 .status-card {
   background: var(--surface);
@@ -1680,6 +1691,7 @@ body {
   line-height: 1.5;
   font-size: 13px;
   padding-left: 26px;
+  word-break: break-word;
 }
 .status-card-link {
   display: inline-flex;
@@ -1694,6 +1706,17 @@ body {
 }
 .status-card-link:hover {
   text-decoration: underline;
+}
+.status-spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid rgba(154, 52, 18, 0.2);
+  border-top-color: var(--accent);
+  animation: spinCard 0.9s linear infinite;
+}
+@keyframes spinCard {
+  to { transform: rotate(360deg); }
 }
 .status-card-hint {
   margin-left: 26px;

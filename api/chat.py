@@ -18,7 +18,7 @@ import json
 
 from common import *
 from common import log, E, ok, err
-from master_agent import handle_request
+from agents.master_agent import handle_request
 from agents.chat_agent import handle_stream
 
 chat_bp = Blueprint("chat", __name__)

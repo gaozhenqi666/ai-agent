@@ -124,7 +124,7 @@ def guard_user_message(message: str) -> dict:
     """
     # 检测提示词注入
     try:
-        from agents.security import detect_injection
+        from tools.security_tool import detect_injection
         injection = detect_injection(message)
         if injection:
             return {"safe": False, "reason": injection["reason"]}

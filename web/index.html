@@ -222,10 +222,15 @@
   let currentSessionId = localStorage.getItem('currentSessionId') || null;
   let abortController = null;
   let currentStreamingMsgId = null;
+  let activeTaskId = localStorage.getItem('activeTaskId') || null;
+  let activeTaskPoller = null;
+  let latestClarificationPrompt = '';
+  let activeStatusTaskId = null;
+  let pendingTaskCleanupTimer = null;
 
-  function persistTask(sid, msgId, content) {
+  function persistTask(sid, msgId, content, taskId = null) {
     sessionStorage.setItem('active_task', JSON.stringify({
-      session_id: sid, streaming_msg_id: msgId, partial_content: content, ts: Date.now(),
+      session_id: sid, streaming_msg_id: msgId, partial_content: content, task_id: taskId || activeTaskId, ts: Date.now(),
     }));
   }
   function clearPersistTask() { sessionStorage.removeItem('active_task'); }
@@ -304,8 +309,21 @@
       document.getElementById('topbarTitle').textContent = _esc(data.messages[0]?.content?.slice(0, 30) || '对话');
       _updateContextMeter(data.total_tokens);
       renderMessages(data.messages);
+      syncClarificationPrompt(data.messages);
     } catch (e) {
       console.error('loadMessages error:', e);
+    }
+  }
+
+  function syncClarificationPrompt(messages) {
+    latestClarificationPrompt = '';
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.role !== 'assistant') continue;
+      if ((m.content || '').includes('我需要确认你要操作哪一组文章')) {
+        latestClarificationPrompt = m.content || '';
+        return;
+      }
     }
   }
 
@@ -323,6 +341,81 @@
     _scrollToBottom();
   }
 
+  async function fetchActiveTask() {
+    const params = new URLSearchParams();
+    if (activeTaskId) params.set('task_id', activeTaskId);
+    if (currentSessionId) params.set('session_id', currentSessionId);
+    const data = await apiFetch(`/api/tasks/active?${params}`);
+    return data.task || null;
+  }
+
+  function persistActiveTaskId(taskId) {
+    activeTaskId = taskId || null;
+    if (activeTaskId) localStorage.setItem('activeTaskId', activeTaskId);
+    else localStorage.removeItem('activeTaskId');
+  }
+
+  function clearTaskSnapshot({ immediate = true } = {}) {
+    if (pendingTaskCleanupTimer) {
+      clearTimeout(pendingTaskCleanupTimer);
+      pendingTaskCleanupTimer = null;
+    }
+    const run = () => {
+      activeStatusTaskId = null;
+      renderTaskSnapshot(null);
+    };
+    if (immediate) run();
+    else pendingTaskCleanupTimer = setTimeout(run, 900);
+  }
+
+  function renderTaskSnapshot(task) {
+    const statusWrap = document.getElementById('statusWrap');
+    if (!task) {
+      if (statusWrap) statusWrap.remove();
+      return;
+    }
+    activeStatusTaskId = task.task_id || activeTaskId || null;
+    const container = document.getElementById('chatInner');
+    const cards = (task.steps || []).map(step => ({
+      type: step.status === 'completed' ? 'task_complete' : step.status === 'failed' ? 'task_failed' : 'task_progress',
+      message: `${step.label}${step.detail ? `：${step.detail}` : ''}`,
+      url: step.url || '',
+      title: step.title || step.label,
+    }));
+    if (cards.length) _renderStatusCards(cards, container);
+  }
+
+  function startTaskPolling() {
+    stopTaskPolling();
+    activeTaskPoller = setInterval(async () => {
+      try {
+        const task = await fetchActiveTask();
+        if (!task) {
+          stopTaskPolling();
+          persistActiveTaskId(null);
+          clearTaskSnapshot();
+          return;
+        }
+        renderTaskSnapshot(task);
+        if (['completed', 'failed', 'cancelled'].includes(task.status)) {
+          stopTaskPolling();
+          persistActiveTaskId(null);
+          clearTaskSnapshot({ immediate: false });
+          if (currentSessionId) await loadMessages(currentSessionId);
+        }
+      } catch (e) {
+        console.error('task poll error:', e);
+      }
+    }, 2500);
+  }
+
+  function stopTaskPolling() {
+    if (activeTaskPoller) {
+      clearInterval(activeTaskPoller);
+      activeTaskPoller = null;
+    }
+  }
+
   function _renderOneMessage(m, isNewest) {
     const isUser = m.role === 'user';
     const avatarClass = isUser ? 'user' : 'assistant';
@@ -331,7 +424,7 @@
     const time = new Date(m.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
     const content = isUser
       ? `<p class="user-text">${_esc(m.content)}</p>`
-      : marked.parse(m.content || '');
+      : renderAssistantMarkdown(m.content || '');
 
     // Edit button on all user messages
     const editBtn = isUser
@@ -395,23 +488,39 @@
   }
 
   function interruptTask() {
-    if (abortController) {
-      abortController.abort();
-      abortController = null;
-    }
-    // Show "已中断" in streaming message
-    if (currentStreamingMsgId) {
-      const el = document.getElementById(currentStreamingMsgId);
-      if (el) {
-        const contentEl = el.querySelector('.msg-content');
-        if (contentEl) contentEl.innerHTML = '<span style="color:var(--muted);font-style:italic">已中断</span>';
+    (async () => {
+      if (abortController) {
+        abortController.abort();
+        abortController = null;
       }
-    }
-    setSendBtnNormal();
-    finishProgress();
-    currentStreamingMsgId = null;
-    clearPersistTask();
-    _scrollToBottom();
+      if (currentSessionId) {
+        try {
+          const data = await apiFetch(`/api/sessions/${currentSessionId}/interrupt`, { method: 'POST' });
+          if (data.active_task_id && activeTaskId === data.active_task_id) {
+            persistActiveTaskId(null);
+            stopTaskPolling();
+          }
+          showToast('任务已中断');
+        } catch (e) {
+          console.error('interruptTask error:', e);
+        }
+      }
+      if (currentStreamingMsgId) {
+        const el = document.getElementById(currentStreamingMsgId);
+        if (el) {
+          const contentEl = el.querySelector('.msg-content');
+          if (contentEl) contentEl.innerHTML = '<span style="color:var(--muted);font-style:italic">任务已中断：用户手动停止了当前执行流程。</span>';
+        }
+      }
+      setSendBtnNormal();
+      finishProgress();
+      currentStreamingMsgId = null;
+      clearPersistTask();
+      _scrollToBottom();
+      if (currentSessionId) {
+        await loadMessages(currentSessionId);
+      }
+    })();
   }
 
   // ======== Feature: Edit user message ========
@@ -483,7 +592,11 @@
       // 2. Call interrupt endpoint to clean up side effects + write "任务已中断"
       if (currentSessionId) {
         try {
-          await apiFetch(`/api/sessions/${currentSessionId}/interrupt`, { method: 'POST' });
+          const interruptData = await apiFetch(`/api/sessions/${currentSessionId}/interrupt`, { method: 'POST' });
+          if (interruptData.active_task_id && activeTaskId === interruptData.active_task_id) {
+            persistActiveTaskId(null);
+            stopTaskPolling();
+          }
         } catch (e) { console.error('interrupt error:', e); }
       }
 
@@ -567,6 +680,21 @@
       </div>`;
     }
     statusWrap.innerHTML = html;
+    if (!html.trim()) statusWrap.remove();
+  }
+
+  function renderAssistantMarkdown(text) {
+    if (typeof marked === 'undefined' || !marked.parse) {
+      return _esc(text || '');
+    }
+    return marked.parse(text || '');
+  }
+
+  function renderStreamingContent(text) {
+    const value = (text || '').replace(/\r\n/g, '\n');
+    const escaped = _esc(value)
+      .replace(/\n/g, '<br>');
+    return escaped;
   }
 
   // ======== Send (SSE Streaming) ========
@@ -579,6 +707,9 @@
     abortController = new AbortController();
     setSendBtnStop();
     showProgress();
+    stopTaskPolling();
+    persistActiveTaskId(null);
+    clearTaskSnapshot();
 
     // Append user message (temp ID, updated when start arrives)
     const tempUserId = 'tmp-usr-' + Date.now();
@@ -638,6 +769,10 @@
                 currentSessionId = data.session_id;
                 localStorage.setItem('currentSessionId', data.session_id);
                 document.getElementById('topbarTitle').textContent = msg.slice(0, 30);
+                if (data.task_id) {
+                  persistActiveTaskId(data.task_id);
+                  startTaskPolling();
+                }
                 if (data.user_message_id && tempUserId) {
                   const tempEl = document.querySelector(`[data-mid="${tempUserId}"]`);
                   if (tempEl) {
@@ -647,12 +782,8 @@
                 }
               } else if (currentEvent === 'content') {
                 fullContent += data.delta;
-                if (typeof marked !== 'undefined' && marked.parse) {
-                  contentEl.innerHTML = marked.parse(fullContent);
-                } else {
-                  contentEl.textContent = fullContent;
-                }
-                persistTask(currentSessionId, msgId, fullContent);
+                contentEl.innerHTML = renderStreamingContent(fullContent);
+                persistTask(currentSessionId, msgId, fullContent, activeTaskId);
                 _scrollToBottom();
               } else if (currentEvent === 'status') {
                 statusCards.push(data);
@@ -667,8 +798,8 @@
         }
       }
 
-      if (fullContent && typeof marked !== 'undefined' && marked.parse) {
-        contentEl.innerHTML = marked.parse(fullContent);
+      if (fullContent) {
+        contentEl.innerHTML = renderAssistantMarkdown(fullContent);
       }
       loadSessions();
     } catch (e) {
@@ -704,6 +835,9 @@
   function newChat() {
     currentSessionId = null;
     localStorage.removeItem('currentSessionId');
+    persistActiveTaskId(null);
+    stopTaskPolling();
+    clearTaskSnapshot();
     document.getElementById('topbarTitle').textContent = '新对话';
     _updateContextMeter(0);
     document.getElementById('chatInner').innerHTML = '<div class="system-msg" id="welcomeMsg">开始一段新对话，问点什么吧</div>';
@@ -730,23 +864,26 @@
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
     });
-    await loadSessions();
+      await loadSessions();
 
-    const persisted = restorePersistTask();
+      const persisted = restorePersistTask();
     if (persisted && persisted.session_id) {
       currentSessionId = persisted.session_id;
       localStorage.setItem('currentSessionId', persisted.session_id);
+      if (persisted.task_id) persistActiveTaskId(persisted.task_id);
       await loadMessages(persisted.session_id);
       if (persisted.streaming_msg_id && persisted.partial_content) {
         const el = document.getElementById(persisted.streaming_msg_id);
         if (el) {
           const ce = el.querySelector('.msg-content');
-          if (ce && typeof marked !== 'undefined') ce.innerHTML = marked.parse(persisted.partial_content);
+          if (ce) ce.innerHTML = renderStreamingContent(persisted.partial_content);
         }
       }
       if (Date.now() - persisted.ts < 60000) showToast('正在恢复上一次对话...');
+      if (activeTaskId) startTaskPolling();
     } else if (currentSessionId) {
       await selectSession(currentSessionId);
+      if (activeTaskId) startTaskPolling();
     }
   });
   </script>

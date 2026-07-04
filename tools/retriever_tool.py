@@ -16,8 +16,9 @@ from common import (
     embedding_to_blob, blob_to_embedding, cosine_similarity,
 )
 
-from .embedder          import embed_one
-from .keyword_extractor import extract_keywords
+from .embedder_tool import embed_one
+from .keyword_extractor_tool import extract_keywords
+from .runtime_cache_tool import cache_get, cache_set
 
 import json
 import math
@@ -63,7 +64,7 @@ def save_chunks(article_id: str, chunks: list[dict]) -> int:
 
 def embed_texts_batch(texts: list[str]) -> list[list[float]]:
     """薄包装：避免循环引用"""
-    from .embedder import embed_texts
+    from .embedder_tool import embed_texts
     return embed_texts(texts)
 
 
@@ -124,6 +125,17 @@ def hybrid_search(
     if not query or not query.strip():
         return []
 
+    cache_key = json.dumps({
+        "query": query,
+        "top_k": top_k,
+        "vector_weight": vector_weight,
+        "keyword_weight": keyword_weight,
+        "return_articles": return_articles,
+    }, ensure_ascii=False, sort_keys=True)
+    cached = cache_get("hybrid_search", cache_key)
+    if cached is not None:
+        return cached
+
     log.info(f"[retriever] 混合检索: {query!r} top_k={top_k}")
 
     # 1) 提取关键词
@@ -164,11 +176,24 @@ def hybrid_search(
         k_norm = r["keyword_score"] / k_max if k_max else 0
         r["score"] = vector_weight * v_norm + keyword_weight * k_norm
 
-    # 6) 排序，取 Top K
+    # 6) 轻量重排：标题短语命中额外加分
+    query_lower = query.lower()
+    for r in rows:
+        title = (r.get("title") or "").lower()
+        boost = 0.0
+        if query_lower and query_lower in title:
+            boost += 0.12
+        for kw in keywords[:5]:
+            kw_lower = kw.lower()
+            if kw_lower and kw_lower in title:
+                boost += 0.04
+        r["score"] += boost
+
+    # 7) 排序，取 Top K
     rows.sort(key=lambda r: r["score"], reverse=True)
     top = rows[:top_k]
 
-    # 7) 整理返回
+    # 8) 整理返回
     results = []
     for r in top:
         item = {
@@ -194,6 +219,7 @@ def hybrid_search(
             }
         results.append(item)
 
+    cache_set("hybrid_search", cache_key, results, ttl_seconds=600)
     return results
 
 

@@ -62,7 +62,7 @@
           <h1 class="knowledge-title">知识库</h1>
           <div class="search-box">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--muted);"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            <input type="text" placeholder="语义搜索文章..." />
+            <input type="text" placeholder="搜索文章标题、摘要或正文..." />
             <kbd>⌘ K</kbd>
           </div>
         </div>
@@ -78,7 +78,8 @@
         <div class="sort-row">
           <span>排序:</span>
           <button class="sort-btn active" onclick="setSort('latest')">最新</button>
-          <button class="sort-btn" onclick="setSort('most_relevant')">最相关</button>
+          <button class="sort-btn" onclick="setSort('updated')">最近更新</button>
+          <button class="sort-btn" onclick="setSort('most_cited')">最多查看</button>
         </div>
 
         <div class="article-grid" id="articleGrid">
@@ -92,6 +93,7 @@
   const API = '';
   let currentSort = 'latest';
   let currentTag = null;
+  let currentSearch = '';
 
   async function apiFetch(path, opts = {}) {
     const res = await fetch(API + path, {
@@ -118,18 +120,29 @@
     try {
       const params = new URLSearchParams({ sort: currentSort, limit: '50' });
       if (currentTag) params.set('tag', currentTag);
+      if (currentSearch) params.set('search', currentSearch);
       const data = await apiFetch(`/api/knowledge/articles?${params}`);
       const grid = document.getElementById('articleGrid');
       if (!data.items.length) {
-        grid.innerHTML = '<div style="padding:32px;text-align:center;font-size:13px;color:var(--muted-2);">还没有知识库文章</div>';
+        grid.innerHTML = `<div style="padding:32px;text-align:center;font-size:13px;color:var(--muted-2);">${currentSearch ? '没有匹配结果' : '还没有知识库文章'}</div>`;
         return;
       }
       grid.innerHTML = data.items.map(a => {
-        const preview = (a.summary || a.content?.slice(0, 150) || '').replace(/\n/g, ' ');
+        const preview = (a.summary || '').replace(/\n/g, ' ');
+        const meta = [
+          a.source || 'Manual',
+          a.updated_at ? new Date(a.updated_at).toLocaleDateString('zh-CN') : '',
+        ].filter(Boolean).join(' · ');
         return `
           <a class="article-card" href="preview.html?id=${a.article_id}&type=knowledge">
+            <div class="article-card-head">
+              <span class="article-card-source">${_esc(a.source || 'Manual')}</span>
+            </div>
             <h3 class="article-card-title">${_esc(a.title)}</h3>
-            <p class="article-card-preview">${_esc(preview)}...</p>
+            <p class="article-card-preview">${_esc(preview || '暂无摘要')}${preview ? '...' : ''}</p>
+            <div class="article-card-foot">
+              <span>${_esc(meta)}</span>
+            </div>
           </a>`;
       }).join('');
     } catch (e) { console.error('loadArticles error:', e); }
@@ -143,6 +156,11 @@
   }
 
   document.addEventListener('DOMContentLoaded', () => {
+    const searchInput = document.querySelector('.search-box input');
+    searchInput.addEventListener('input', () => {
+      currentSearch = searchInput.value.trim();
+      loadArticles();
+    });
     loadStats();
     loadArticles();
   });

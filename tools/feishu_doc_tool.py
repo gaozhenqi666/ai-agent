@@ -202,6 +202,40 @@ def _generate_summary(search_results: list[dict], query: str) -> str:
         return f"以上 {len(search_results)} 篇文章涵盖了「{query}」相关的多个方面，建议按顺序阅读。"
 
 
+def build_digest_payload(search_results: list[dict], query: str) -> dict:
+    """
+    生成统一的文章摘要载荷，供飞书和邮件共用，避免两边内容不一致。
+    返回:
+      {
+        "title": "...",
+        "summary": "...",
+        "articles": [{"index":1,"title":"...","url":"...","excerpt":"..."}]
+      }
+    """
+    articles = []
+    for idx, item in enumerate(search_results, 1):
+        full = (item.get("full_content") or "").strip()
+        snippet = (item.get("snippet") or "").strip()
+        excerpt = ""
+        if full and len(full) > 200 and not _is_garbage_content(full):
+            excerpt = full[:500]
+        elif snippet:
+            excerpt = snippet[:300]
+        articles.append({
+            "index": idx,
+            "title": item.get("title", ""),
+            "url": item.get("url", ""),
+            "excerpt": excerpt,
+        })
+
+    return {
+        "title": _generate_doc_title(search_results, query),
+        "summary": _generate_summary(search_results, query) if len(search_results) > 1 else "",
+        "articles": articles,
+        "query": query,
+    }
+
+
 def save_search_to_feishu(search_results: list[dict], query: str) -> dict:
     """
     将搜索结果保存到飞书云文档。
@@ -222,7 +256,8 @@ def save_search_to_feishu(search_results: list[dict], query: str) -> dict:
         log.error(f"[feishu] 获取 token 失败: {e}")
         return {"success": False, "error": f"飞书认证失败: {e}"}
 
-    doc_title = _generate_doc_title(search_results, query)
+    digest_payload = build_digest_payload(search_results, query)
+    doc_title = digest_payload["title"]
 
     try:
         doc_id = _create_doc(doc_title, token)
@@ -236,28 +271,21 @@ def save_search_to_feishu(search_results: list[dict], query: str) -> dict:
     # 总标题（H1）
     blocks.append(_heading1_block(doc_title))
 
-    for i, r in enumerate(search_results, 1):
+    for article in digest_payload["articles"]:
         # 标题（H2）
-        blocks.append(_heading2_block(f"{i}. {r['title']}"))
+        blocks.append(_heading2_block(f"{article['index']}. {article['title']}"))
 
-        # 摘要：优先用爬取正文（非垃圾），其次用原 snippet
-        full = r.get("full_content", "")
-        snippet = r.get("snippet", "").strip()
-
-        if full and len(full) > 200 and not _is_garbage_content(full):
-            blocks.append(_text_block(full[:500]))
-        elif snippet:
-            blocks.append(_text_block(snippet[:300] if len(snippet) > 300 else snippet))
+        if article.get("excerpt"):
+            blocks.append(_text_block(article["excerpt"]))
 
         # 链接
-        if r.get("url"):
-            blocks.append(_link_block(f"🔗 {r['url']}", r["url"]))
+        if article.get("url"):
+            blocks.append(_link_block(f"🔗 {article['url']}", article["url"]))
 
     # 如果 >1 篇，加总结
-    if n > 1:
+    if digest_payload.get("summary"):
         blocks.append(_heading2_block("总结"))
-        summary = _generate_summary(search_results, query)
-        blocks.append(_text_block(summary))
+        blocks.append(_text_block(digest_payload["summary"]))
 
     # 写入文档
     try:
@@ -274,4 +302,5 @@ def save_search_to_feishu(search_results: list[dict], query: str) -> dict:
         "doc_id": doc_id,
         "doc_url": doc_url,
         "article_count": n,
+        "digest_payload": digest_payload,
     }

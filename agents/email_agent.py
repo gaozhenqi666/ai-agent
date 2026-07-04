@@ -21,6 +21,7 @@ import sys
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from pathlib import Path
+import httpx
 
 try:
     from common import log, Config
@@ -32,12 +33,42 @@ except ImportError:
 def _get_smtp_config() -> dict:
     """从环境变量读取 SMTP 配置"""
     return {
-        "host": Config("SMTP_HOST", "smtp.qq.com"),
-        "port": int(Config("SMTP_PORT", "587")),
-        "user": Config("SMTP_USER", ""),
-        "password": Config("SMTP_PASS", ""),
-        "from_addr": Config("SMTP_FROM", Config("SMTP_USER", "")),
+        "host": Config.SMTP_HOST,
+        "port": Config.SMTP_PORT,
+        "user": Config.SMTP_USER,
+        "password": Config.SMTP_PASS,
+        "from_addr": Config.SMTP_FROM,
     }
+
+
+def _send_via_resend(to: str | list[str], subject: str, body: str, html: bool = False) -> dict:
+    if not Config.RESEND_API_KEY:
+        return {"success": False, "error": "RESEND_API_KEY 未配置"}
+    if not Config.RESEND_FROM_EMAIL:
+        return {"success": False, "error": "RESEND_FROM_EMAIL 未配置"}
+
+    payload = {
+        "from": Config.RESEND_FROM_EMAIL,
+        "to": [to] if isinstance(to, str) else to,
+        "subject": subject,
+        "html" if html else "text": body,
+    }
+    try:
+        resp = httpx.post(
+            "https://api.resend.com/emails",
+            headers={
+                "Authorization": f"Bearer {Config.RESEND_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+            timeout=20,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return {"success": True, "provider": "resend", "message_id": data.get("id", "")}
+    except Exception as e:
+        log.error(f"[email] Resend 发送失败: {e}")
+        return {"success": False, "error": f"Resend 发送失败: {e}"}
 
 
 def send_email(
@@ -53,10 +84,16 @@ def send_email(
       {"success": True, "message_id": "..."}
       {"success": False, "error": "..."}
     """
-    cfg = _get_smtp_config()
+    if Config.RESEND_API_KEY:
+        resend_result = _send_via_resend(to=to, subject=subject, body=body, html=html)
+        if resend_result.get("success"):
+            log.info(f"[email] 已通过 Resend 发送: {subject} → {to}")
+            return resend_result
+        log.warning(f"[email] Resend 不可用，回退 SMTP: {resend_result.get('error')}")
 
+    cfg = _get_smtp_config()
     if not cfg["user"] or not cfg["password"]:
-        return {"success": False, "error": "SMTP 未配置（缺少 SMTP_USER / SMTP_PASS）"}
+        return {"success": False, "error": "邮件未配置：Resend/SMTP 都不可用"}
 
     try:
         if html:
@@ -75,7 +112,7 @@ def send_email(
             server.send_message(msg)
 
         log.info(f"[email] 已发送: {subject} → {to}")
-        return {"success": True}
+        return {"success": True, "provider": "smtp"}
 
     except smtplib.SMTPAuthenticationError:
         return {"success": False, "error": "SMTP 认证失败，请检查 SMTP_USER / SMTP_PASS"}
@@ -121,7 +158,7 @@ def send_daily_confirmation(
 if __name__ == "__main__":
     import json
     result = send_email(
-        to=Config("TEST_EMAIL", ""),
+        to=Config.SMTP_FROM or Config.RESEND_FROM_EMAIL,
         subject="Harness 邮件测试",
         body="这是一封来自 Harness 的测试邮件。",
     )

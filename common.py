@@ -52,6 +52,17 @@ class Config:
     FEISHU_APP_ID    = os.getenv("FEISHU_APP_ID", "")
     FEISHU_APP_SECRET= os.getenv("FEISHU_APP_SECRET", "")
     RESEND_API_KEY   = os.getenv("RESEND_API_KEY", "")
+    RESEND_FROM_EMAIL = os.getenv("RESEND_FROM_EMAIL", "")
+    SMTP_HOST        = os.getenv("SMTP_HOST", "smtp.qq.com")
+    SMTP_PORT        = int(os.getenv("SMTP_PORT", "587"))
+    SMTP_USER        = os.getenv("SMTP_USER", "")
+    SMTP_PASS        = os.getenv("SMTP_PASS", "")
+    SMTP_FROM        = os.getenv("SMTP_FROM", SMTP_USER)
+
+    # 知识库检索注入
+    KB_CHAT_ENABLED    = os.getenv("KB_CHAT_ENABLED", "true").lower() == "true"
+    KB_CHAT_TOP_K      = int(os.getenv("KB_CHAT_TOP_K", "4"))
+    KB_CHAT_MIN_SCORE  = float(os.getenv("KB_CHAT_MIN_SCORE", "0.45"))
 
     # 阿里云 DashScope（Embedding）
     DASHSCOPE_API_KEY  = os.getenv("DASHSCOPE_API_KEY", "")
@@ -86,6 +97,15 @@ def err(code: int, message: str, error_type: str = "business", details: dict | N
         "error": {"type": error_type, "details": details or {}},
         "request_id": str(uuid.uuid4())[:8],
     }
+
+
+def verify_internal_api_key(provided: str | None) -> bool:
+    """校验内部调用口令，供定时任务等非前端入口使用。"""
+    expected = (Config.INTERNAL_API_KEY or "").strip()
+    actual = (provided or "").strip()
+    if not expected or not actual:
+        return False
+    return actual == expected
 
 
 # ---------- 5. 错误码（与 API.md 5 节对齐） ----------
@@ -183,6 +203,17 @@ def get_db() -> "libsql_client.ClientSync":
             _db_client.execute("PRAGMA foreign_keys = ON;")
         except Exception:
             pass
+        # 本地开发下启用更积极的 SQLite 缓存设置
+        for pragma in (
+            "PRAGMA journal_mode = WAL;",
+            "PRAGMA synchronous = NORMAL;",
+            "PRAGMA cache_size = -64000;",
+            "PRAGMA temp_store = MEMORY;",
+        ):
+            try:
+                _db_client.execute(pragma)
+            except Exception:
+                pass
     return _db_client
 
 

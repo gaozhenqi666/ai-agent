@@ -54,14 +54,13 @@ def list_articles():
         sql += " AND source=?"
         params.append(source)
     if search:
-        sql += " AND (title LIKE ? OR summary LIKE ?)"
-        params += [f"%{search}%", f"%{search}%"]
+        sql += " AND (title LIKE ? OR summary LIKE ? OR content LIKE ?)"
+        params += [f"%{search}%", f"%{search}%", f"%{search}%"]
 
     if sort == "most_cited":
         sql += " ORDER BY view_count DESC, created_at DESC"
-    elif sort == "most_relevant":
-        # M1 占位：按更新时间排序（M2 接入向量检索）
-        sql += " ORDER BY updated_at DESC"
+    elif sort == "updated":
+        sql += " ORDER BY updated_at DESC, created_at DESC"
     else:
         sql += " ORDER BY created_at DESC"
 
@@ -111,7 +110,7 @@ def create_article():
         return jsonify(err(3001, "title 和 content 必填"))
 
     # === 内容质量检查（防止 AI 话术 / 反爬页入库）===
-    from agents.scraper import _validate_article_content
+    from tools.scraper_tool import _validate_article_content
     content = body["content"]
     if len(content) < 500:
         return jsonify(err(3004, f"内容过短（{len(content)} 字符），拒绝入库"))
@@ -139,8 +138,8 @@ def create_article():
     # 异步切分 + 存 chunks（M1 先同步：等切分完成才返回）
     chunk_count = 0
     try:
-        from agents.chunker import recursive_split
-        from agents.retriever import save_chunks
+        from tools.chunker_tool import recursive_split
+        from tools.retriever_tool import save_chunks
         chunks = recursive_split(content, chunk_size=500, overlap=50)
         chunk_count = save_chunks(aid, chunks)
         log.info(f"[knowledge/create] 文章 {aid} 切成 {chunk_count} 个 chunks")
@@ -169,7 +168,7 @@ def import_from_url():
         return jsonify(err(3001, "url 必填"))
 
     # 1) 爬取
-    from agents.scraper import scrape_url
+    from tools.scraper_tool import scrape_url
     result = scrape_url(url)
 
     if not result["success"]:
@@ -199,8 +198,8 @@ def import_from_url():
     # 3) 切片 + 嵌入
     chunk_count = 0
     try:
-        from agents.chunker import recursive_split
-        from agents.retriever import save_chunks
+        from tools.chunker_tool import recursive_split
+        from tools.retriever_tool import save_chunks
         chunks = recursive_split(content, chunk_size=500, overlap=50)
         chunk_count = save_chunks(aid, chunks)
         log.info(f"[knowledge/import] 文章 {aid} 切成 {chunk_count} 个 chunks")
@@ -245,8 +244,8 @@ def update_article(article_id):
     chunk_count = 0
     if re_chunk:
         try:
-            from agents.chunker import recursive_split
-            from agents.retriever import delete_chunks, save_chunks
+            from tools.chunker_tool import recursive_split
+            from tools.retriever_tool import delete_chunks, save_chunks
             delete_chunks(article_id)
             chunks = recursive_split(body["content"], chunk_size=500, overlap=50)
             chunk_count = save_chunks(article_id, chunks)
@@ -316,7 +315,7 @@ def knowledge_search():
     if not query:
         return jsonify(err(3001, "query 不能为空"))
 
-    from agents.retriever import hybrid_search
+    from tools.retriever_tool import hybrid_search
     results = hybrid_search(
         query=query,
         top_k=top_k,

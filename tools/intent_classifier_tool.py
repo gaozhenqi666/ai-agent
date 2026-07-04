@@ -39,6 +39,8 @@ def _regex_intent(message: str) -> tuple[str, float]:
     msg = message.strip().lower()
 
     # 高置信度模式（confidence=1.0）
+    if re.search(r'(帮我|给我|请).{0,8}(找|搜|查|推荐).{0,20}(文章|论文|资料|教程)', msg):
+        return ("search", 1.0)
     if re.search(r'(搜索|搜一下|搜|查找|检索|search|find).{0,10}(关于|一下|一篇|几篇|文章|论文|资料)', msg):
         return ("search", 1.0)
     if re.search(r'(生成|写|创作|撰写|来一篇|出一篇)\s*(博客|文章|blog)', msg):
@@ -102,7 +104,7 @@ def _embed_intents() -> dict[str, list[float]]:
     if cached and len(cached) == len(INTENT_TEMPLATES):
         return cached
 
-    from agents.embedder import embed_texts
+    from tools.embedder_tool import embed_texts
     texts = list(INTENT_TEMPLATES.values())
     keys = list(INTENT_TEMPLATES.keys())
 
@@ -115,7 +117,7 @@ def _embed_intents() -> dict[str, list[float]]:
 
 def _cosine_intent(message: str) -> tuple[str, float]:
     """余弦相似度匹配，返回 (best_intent, best_score)"""
-    from agents.embedder import embed_one
+    from tools.embedder_tool import embed_one
 
     embeddings = _embed_intents()
     msg_vec = embed_one(message)
