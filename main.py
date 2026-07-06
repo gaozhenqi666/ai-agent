@@ -98,7 +98,17 @@ def internal_error(e):
     return jsonify(err(500, f"服务器内部错误: {e}")), 500
 
 
-# ---------- 5. 启动 ----------
+# ---------- 5. 生产环境自动初始化 DB ----------
+_IS_PRODUCTION = "RENDER" in os.environ or "FLY_APP_NAME" in os.environ
+if _IS_PRODUCTION or not os.environ.get("SKIP_AUTO_INIT_DB"):
+    try:
+        init_db()
+        log.info("[启动] 数据库初始化完成")
+    except Exception as e:
+        log.warning(f"[启动] DB 初始化跳过: {e}")
+
+
+# ---------- 6. 启动 ----------
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
