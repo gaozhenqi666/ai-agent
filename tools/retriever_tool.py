@@ -1,11 +1,17 @@
 """
 agents/retriever.py
 ==========================================================
-混合检索器（双路 + 权重融合）
-- 路 1：向量检索（cosine similarity）
-- 路 2：关键词检索（BM25 简化版：chunk_text + chunk.keywords + article.tags 的 TF 匹配）
-- 融合：按权重 (默认 0.6 向量 + 0.4 关键词) 加权求和
-- 返回 Top K 切片 + 父文章信息
+多路召回 + RRF（倒数排序融合）检索器
+
+三路独立召回：
+- 路 1：向量检索（dense embedding + cosine similarity）
+- 路 2：关键词检索（BM25 简化版：chunk_text + chunk.keywords + article.tags）
+- 路 3：标签/标题匹配（query 关键词 → article.tags + title 精确命中）
+
+融合方式：
+- RRF（Reciprocal Rank Fusion）：score = Σ 1 / (k + rank_i)，默认 k = 60
+
+hybrid_search() 保留为兼容入口，内部委托给 multi_recall_search()
 ==========================================================
 """
 
@@ -96,54 +102,49 @@ def delete_chunks(article_id: str) -> int:
     return cnt
 
 
-# ---------- 3. 混合检索 ----------
-def hybrid_search(
+# ---------- 3. 多路召回 + RRF 融合 ----------
+def multi_recall_search(
     query: str,
     top_k: int = 5,
-    vector_weight: float = 0.5,
-    keyword_weight: float = 0.5,
+    rrf_k: int = 60,
+    recall_paths: list[str] | None = None,
     return_articles: bool = True,
 ) -> list[dict]:
     """
-    混合检索主入口
-    返回: [
-      {
-        "chunk_id": "...",
-        "article_id": "...",
-        "chunk_text": "...",
-        "chunk_index": 0,
-        "start_pos": 0,
-        "end_pos": 500,
-        "score": 0.85,           # 融合分
-        "vector_score": 0.78,
-        "keyword_score": 0.42,
-        "article": { ... }       # 父文章信息（如果 return_articles=True）
-      },
-      ...
-    ]
+    多路召回 + RRF 融合检索
+
+    三路独立召回：
+      - "vector":  向量检索（dense embedding + cosine similarity）
+      - "bm25":    BM25 关键词检索（含 chunk_text / chunk.keywords / article.tags）
+      - "tag":     标签/标题匹配（query 词命中 article.tags 和 title）
+
+    RRF 融合公式：
+      RRF_score(chunk) = Σ 1 / (rrf_k + rank_of_chunk_in_path)
+      默认 rrf_k = 60
+
+    返回格式同 hybrid_search()，额外附上 rrf_score 和各路 rank 明细
     """
     if not query or not query.strip():
         return []
 
+    if recall_paths is None:
+        recall_paths = ["vector", "bm25", "tag"]
+
+    # 缓存 key
     cache_key = json.dumps({
-        "query": query,
-        "top_k": top_k,
-        "vector_weight": vector_weight,
-        "keyword_weight": keyword_weight,
-        "return_articles": return_articles,
+        "query": query, "top_k": top_k, "rrf_k": rrf_k,
+        "paths": sorted(recall_paths), "return_articles": return_articles,
     }, ensure_ascii=False, sort_keys=True)
-    cached = cache_get("hybrid_search", cache_key)
+    cached = cache_get("multi_recall", cache_key)
     if cached is not None:
         return cached
 
-    log.info(f"[retriever] 混合检索: {query!r} top_k={top_k}")
+    log.info(f"[retriever] 多路召回: {query!r} paths={recall_paths} top_k={top_k}")
 
-    # 1) 提取关键词
+    # 1) 提取关键词（向量路不需要，bm25 和 tag 路需要）
     keywords = extract_keywords(query)
-    log.info(f"[retriever] 关键词: {keywords}")
 
-    # 2) 加载所有 published 文章的 chunks（粗筛）
-    #    M1 数据量小：全量加载 + 全量计算
+    # 2) 加载所有 published chunks（全量进内存）
     rows = db_query(
         """SELECT c.chunk_id, c.article_id, c.chunk_index, c.chunk_text,
                   c.embedding, c.start_pos, c.end_pos, c.chunk_size, c.keywords,
@@ -156,44 +157,55 @@ def hybrid_search(
     if not rows:
         return []
 
-    # 3) 计算向量分
-    query_vec = embed_one(query)
+    # 3) 各路独立打分
+    # 给每个 row 附加一个 dict 存储各路 rank
     for r in rows:
-        emb = blob_to_embedding(r["embedding"]) if r.get("embedding") else []
-        r["vector_score"] = cosine_similarity(query_vec, emb) if emb else 0.0
+        r["_path_scores"] = {}
 
-    # 4) 计算关键词分（BM25 简化版：词频 * 长度归一）
+    # ---- 路 1：向量检索 ----
+    if "vector" in recall_paths:
+        query_vec = embed_one(query)
+        for r in rows:
+            emb = blob_to_embedding(r["embedding"]) if r.get("embedding") else []
+            r["_path_scores"]["vector"] = cosine_similarity(query_vec, emb) if emb else 0.0
+
+    # ---- 路 2：BM25 关键词 ----
+    if "bm25" in recall_paths:
+        for r in rows:
+            r["_path_scores"]["bm25"] = _bm25_score(query, keywords, r)
+
+    # ---- 路 3：标签/标题匹配 ----
+    if "tag" in recall_paths:
+        for r in rows:
+            r["_path_scores"]["tag"] = _tag_title_score(keywords, r)
+
+    # 4) 各路分别排名（score 降序 → rank 从 1 开始）
+    chunk_ids = [r["chunk_id"] for r in rows]
+    rrf_accum = {cid: 0.0 for cid in chunk_ids}
+    rrf_detail = {cid: {} for cid in chunk_ids}
+
+    for path in recall_paths:
+        # 按该路 score 降序排列
+        sorted_rows = sorted(rows, key=lambda r: r["_path_scores"].get(path, 0.0), reverse=True)
+        for rank_idx, r in enumerate(sorted_rows):
+            cid = r["chunk_id"]
+            rank_i = rank_idx + 1  # rank 从 1 开始
+            contribution = 1.0 / (rrf_k + rank_i)
+            rrf_accum[cid] += contribution
+            rrf_detail[cid][path] = {"rank": rank_i, "score": round(r["_path_scores"].get(path, 0.0), 4)}
+
+    # 5) 按 RRF 总分排序
     for r in rows:
-        r["keyword_score"] = _bm25_score(query, keywords, r)
+        r["rrf_score"] = rrf_accum[r["chunk_id"]]
+        r["_rrf_detail"] = rrf_detail[r["chunk_id"]]
+        # 同时保留各路原始分供展示
+        for path in recall_paths:
+            r[f"{path}_score"] = r["_path_scores"].get(path, 0.0)
 
-    # 5) 归一化到 [0, 1] 然后加权
-    v_scores = [r["vector_score"] for r in rows]
-    k_scores = [r["keyword_score"] for r in rows]
-    v_max = max(v_scores) if v_scores else 1
-    k_max = max(k_scores) if k_scores else 1
-    for r in rows:
-        v_norm = r["vector_score"] / v_max if v_max else 0
-        k_norm = r["keyword_score"] / k_max if k_max else 0
-        r["score"] = vector_weight * v_norm + keyword_weight * k_norm
-
-    # 6) 轻量重排：标题短语命中额外加分
-    query_lower = query.lower()
-    for r in rows:
-        title = (r.get("title") or "").lower()
-        boost = 0.0
-        if query_lower and query_lower in title:
-            boost += 0.12
-        for kw in keywords[:5]:
-            kw_lower = kw.lower()
-            if kw_lower and kw_lower in title:
-                boost += 0.04
-        r["score"] += boost
-
-    # 7) 排序，取 Top K
-    rows.sort(key=lambda r: r["score"], reverse=True)
+    rows.sort(key=lambda r: r["rrf_score"], reverse=True)
     top = rows[:top_k]
 
-    # 8) 整理返回
+    # 6) 整理返回
     results = []
     for r in top:
         item = {
@@ -204,9 +216,13 @@ def hybrid_search(
             "start_pos":     r["start_pos"],
             "end_pos":       r["end_pos"],
             "chunk_size":    r["chunk_size"],
-            "score":         round(r["score"], 4),
-            "vector_score":  round(r["vector_score"], 4),
-            "keyword_score": round(r["keyword_score"], 4),
+            "score":         round(r["rrf_score"], 4),       # RRF 融合分
+            "rrf_score":     round(r["rrf_score"], 4),
+            "vector_score":  round(r.get("vector_score", r["_path_scores"].get("vector", 0.0)), 4),
+            "keyword_score": round(r.get("bm25_score", r["_path_scores"].get("bm25", 0.0)), 4),
+            "tag_score":     round(r.get("tag_score", r["_path_scores"].get("tag", 0.0)), 4),
+            "rrf_detail":    {p: {"rank": d["rank"], "score": d["score"]}
+                              for p, d in r["_rrf_detail"].items()},
         }
         if return_articles:
             item["article"] = {
@@ -219,11 +235,59 @@ def hybrid_search(
             }
         results.append(item)
 
-    cache_set("hybrid_search", cache_key, results, ttl_seconds=600)
+    cache_set("multi_recall", cache_key, results, ttl_seconds=600)
     return results
 
 
-# ---------- 4. BM25 简化版 ----------
+def _tag_title_score(keywords: list[str], chunk_row: dict) -> float:
+    """
+    路 3：标签/标题匹配打分
+
+    - article.tags 精确命中一个关键词 +0.5
+    - article.title 包含一个关键词 +0.3
+    - query 完整字符串在 title 中 +0.5
+    """
+    score = 0.0
+    tags_raw = chunk_row.get("tags") or "[]"
+    tags = json.loads(tags_raw) if isinstance(tags_raw, str) else (tags_raw or [])
+    title = (chunk_row.get("title") or "").lower()
+
+    for kw in keywords:
+        kw_lower = kw.lower().strip()
+        if not kw_lower or len(kw_lower) < 2:
+            continue
+        # 标签命中（tag 通常是英文如 "RAG", "Agent"，做小写匹配）
+        for tag in tags:
+            if isinstance(tag, str) and kw_lower in tag.lower():
+                score += 0.5
+                break
+        # 标题命中
+        if kw_lower in title:
+            score += 0.3
+
+    return score
+
+
+# ---------- 4. 混合检索（兼容旧接口，委托 multi_recall_search）----------
+def hybrid_search(
+    query: str,
+    top_k: int = 5,
+    vector_weight: float = 0.5,
+    keyword_weight: float = 0.5,
+    return_articles: bool = True,
+) -> list[dict]:
+    """
+    兼容旧接口 —— 内部使用 RRF 多路召回
+    vector_weight / keyword_weight 参数保留但不影响 RRF 行为
+    """
+    return multi_recall_search(
+        query=query,
+        top_k=top_k,
+        return_articles=return_articles,
+    )
+
+
+# ---------- 5. BM25 简化版 ----------
 def _bm25_score(query: str, keywords: list[str], chunk_row: dict) -> float:
     """
     简化 BM25：在 chunk_text + chunk.keywords + article.tags 中匹配
@@ -273,7 +337,7 @@ def _bm25_score(query: str, keywords: list[str], chunk_row: dict) -> float:
     return score
 
 
-# ---------- 5. 给 LLM 喂数据（按父文章去重）----------
+# ---------- 6. 给 LLM 喂数据（按父文章去重）----------
 def expand_to_articles(chunks: list[dict]) -> list[dict]:
     """
     把 chunks 按 article_id 去重，附上完整原文
@@ -304,7 +368,11 @@ def expand_to_articles(chunks: list[dict]) -> list[dict]:
 
 # ---------- 快速测试 ----------
 if __name__ == "__main__":
-    results = hybrid_search("什么是 RAG", top_k=3)
+    print("=== 多路召回 + RRF 融合测试 ===")
+    results = multi_recall_search("什么是 RAG", top_k=3)
     print(f"找到 {len(results)} 条结果:")
     for r in results:
-        print(f"  - [{r['score']:.3f}] {r['article']['title']} | {r['chunk_text'][:50]}...")
+        detail = r.get("rrf_detail", {})
+        paths_info = ", ".join(f"{p}: rank={d['rank']}" for p, d in detail.items())
+        print(f"  - [RRF={r['score']:.4f}] {r['article']['title']} | {r['chunk_text'][:50]}...")
+        print(f"    各路排名: {paths_info}")

@@ -1,0 +1,1026 @@
+[
+  {
+    "question": "RAG核心架构包含哪三个主要模块？",
+    "ground_truth_keywords": [
+      "RAG",
+      "核心架构",
+      "索引",
+      "检索",
+      "生成",
+      "三模块"
+    ]
+  },
+  {
+    "question": "RAG的三种主要范式演进是什么？",
+    "ground_truth_keywords": [
+      "Naive RAG",
+      "Advanced RAG",
+      "Modular RAG",
+      "三代范式",
+      "演进"
+    ]
+  },
+  {
+    "question": "RAG中检索模块的设计原则有哪些？",
+    "ground_truth_keywords": [
+      "RAG",
+      "检索模块",
+      "设计原则",
+      "工程实践",
+      "检索"
+    ]
+  },
+  {
+    "question": "RAG生成模块如何将检索上下文注入LLM Prompt？",
+    "ground_truth_keywords": [
+      "生成模块",
+      "检索上下文",
+      "注入",
+      "LLM Prompt",
+      "RAG"
+    ]
+  },
+  {
+    "question": "RAG知识库构建包括哪些关键步骤？",
+    "ground_truth_keywords": [
+      "知识库构建",
+      "文档解析",
+      "清洗",
+      "结构化",
+      "RAG"
+    ]
+  },
+  {
+    "question": "RAG索引模块从文档到向量的全流程是什么？",
+    "ground_truth_keywords": [
+      "索引模块",
+      "文档",
+      "向量",
+      "全流程",
+      "RAG"
+    ]
+  },
+  {
+    "question": "RAG系统有哪些延迟优化策略？",
+    "ground_truth_keywords": [
+      "延迟优化",
+      "检索加速",
+      "生成加速",
+      "RAG",
+      "策略"
+    ]
+  },
+  {
+    "question": "Self-RAG的核心原理是什么？",
+    "ground_truth_keywords": [
+      "Self-RAG",
+      "自我反思",
+      "检索增强生成",
+      "原理",
+      "实现"
+    ]
+  },
+  {
+    "question": "CRAG（Corrective RAG）是如何实现纠错式检索增强生成的？",
+    "ground_truth_keywords": [
+      "CRAG",
+      "Corrective RAG",
+      "纠错式",
+      "检索增强生成",
+      "实现"
+    ]
+  },
+  {
+    "question": "Graph RAG如何利用知识图谱进行检索增强生成？",
+    "ground_truth_keywords": [
+      "Graph RAG",
+      "知识图谱",
+      "检索增强生成",
+      "方法",
+      "图谱"
+    ]
+  },
+  {
+    "question": "RAG系统中常用的Query改写技术有哪些？请列举并简要说明Multi-Query、HyDE和Step-Back各自的核心思想。",
+    "ground_truth_keywords": [
+      "Query改写",
+      "Multi-Query",
+      "HyDE",
+      "Step-Back",
+      "RAG"
+    ]
+  },
+  {
+    "question": "RAG应用中幻觉问题的主要成因是什么？有哪些缓解策略？",
+    "ground_truth_keywords": [
+      "幻觉",
+      "RAG",
+      "成因",
+      "缓解策略",
+      "检索增强生成"
+    ]
+  },
+  {
+    "question": "文本嵌入的数学原理是什么？如何从几何直觉理解嵌入向量的相似性？",
+    "ground_truth_keywords": [
+      "文本嵌入",
+      "数学原理",
+      "几何直觉",
+      "向量相似性",
+      "嵌入"
+    ]
+  },
+  {
+    "question": "BGE-M3模型在嵌入方案上有哪些特点？它如何实现多语言、多功能和多粒度？",
+    "ground_truth_keywords": [
+      "BGE-M3",
+      "多语言",
+      "多功能",
+      "多粒度",
+      "嵌入"
+    ]
+  },
+  {
+    "question": "OpenAI text-embedding-3系列模型相比前代有哪些创新？维度可调功能如何实现？",
+    "ground_truth_keywords": [
+      "text-embedding-3",
+      "维度可调",
+      "嵌入模型",
+      "OpenAI",
+      "创新"
+    ]
+  },
+  {
+    "question": "对比学习在嵌入模型训练中如何发挥作用？请解释其基本原理和应用场景。",
+    "ground_truth_keywords": [
+      "对比学习",
+      "嵌入模型",
+      "训练",
+      "正样本",
+      "负样本"
+    ]
+  },
+  {
+    "question": "MTEB基准评测主要衡量嵌入模型的哪些能力？它如何全面评估检索、分类和聚类性能？",
+    "ground_truth_keywords": [
+      "MTEB",
+      "基准评测",
+      "检索",
+      "分类",
+      "聚类"
+    ]
+  },
+  {
+    "question": "如何针对特定领域微调嵌入模型以优化检索效果？请列出关键步骤和注意事项。",
+    "ground_truth_keywords": [
+      "微调",
+      "嵌入模型",
+      "特定领域",
+      "检索效果",
+      "优化"
+    ]
+  },
+  {
+    "question": "稀疏嵌入和稠密嵌入有什么区别？SPLADE和BGE-M3 Sparse在实现上各有何特点？",
+    "ground_truth_keywords": [
+      "稀疏嵌入",
+      "稠密嵌入",
+      "SPLADE",
+      "BGE-M3 Sparse",
+      "对比"
+    ]
+  },
+  {
+    "question": "多语言嵌入模型面临哪些主要挑战？目前有哪些有效的解决方案？",
+    "ground_truth_keywords": [
+      "多语言",
+      "嵌入模型",
+      "挑战",
+      "解决方案",
+      "跨语言"
+    ]
+  },
+  {
+    "question": "将嵌入模型从 float32 压缩到 int8 时，精度会损失多少？有哪些主要的量化方法？",
+    "ground_truth_keywords": [
+      "嵌入模型",
+      "压缩",
+      "量化",
+      "float32",
+      "int8",
+      "精度权衡"
+    ]
+  },
+  {
+    "question": "ColBERT 的迟交互机制如何实现高效的检索？与传统向量检索有何不同？",
+    "ground_truth_keywords": [
+      "ColBERT",
+      "迟交互",
+      "Late Interaction",
+      "检索范式",
+      "向量检索"
+    ]
+  },
+  {
+    "question": "Matryoshka 嵌入表示如何用一个模型支持多维度输出？这种技术有什么实际应用价值？",
+    "ground_truth_keywords": [
+      "Matryoshka",
+      "嵌入表示",
+      "多维度输出",
+      "模型",
+      "技术"
+    ]
+  },
+  {
+    "question": "指令感知嵌入（Instruction-tuned Embedding）如何根据任务调整表示？它解决了传统嵌入的哪些问题？",
+    "ground_truth_keywords": [
+      "指令感知嵌入",
+      "Instruction-tuned Embedding",
+      "任务调整",
+      "表示",
+      "嵌入"
+    ]
+  },
+  {
+    "question": "混合检索的完整技术栈包括哪些组件？如何实现向量搜索与关键词搜索的有效融合？",
+    "ground_truth_keywords": [
+      "混合检索",
+      "Hybrid Search",
+      "技术栈",
+      "实现方案",
+      "向量搜索",
+      "关键词搜索"
+    ]
+  },
+  {
+    "question": "稠密检索中 Flat、IVF、HNSW 三种索引结构在性能、内存和精度上各有什么优缺点？",
+    "ground_truth_keywords": [
+      "稠密检索",
+      "Dense Retrieval",
+      "索引结构",
+      "Flat",
+      "IVF",
+      "HNSW",
+      "对比"
+    ]
+  },
+  {
+    "question": "BM25 算法是如何从 TF-IDF 演变为概率检索框架的？请推导其核心公式。",
+    "ground_truth_keywords": [
+      "BM25",
+      "算法",
+      "推导",
+      "TF-IDF",
+      "概率检索框架"
+    ]
+  },
+  {
+    "question": "倒数排序融合（RRF）的数学原理是什么？在工程实践中如何设置参数以获得最佳效果？",
+    "ground_truth_keywords": [
+      "倒数排序融合",
+      "RRF",
+      "数学原理",
+      "工程最佳实践",
+      "参数"
+    ]
+  },
+  {
+    "question": "多路召回架构中，向量、关键词、实体和图谱这四路召回如何协同工作？各自的优缺点是什么？",
+    "ground_truth_keywords": [
+      "多路召回",
+      "架构",
+      "向量",
+      "关键词",
+      "实体",
+      "图谱",
+      "四路融合"
+    ]
+  },
+  {
+    "question": "Cohere、BGE-Reranker 和 RankGPT 这三种重排序模型在性能、成本和适用场景上有什么差异？",
+    "ground_truth_keywords": [
+      "重排序",
+      "Reranking",
+      "模型",
+      "Cohere",
+      "BGE-Reranker",
+      "RankGPT",
+      "对比"
+    ]
+  },
+  {
+    "question": "在RAG系统中，如何将学习排序（Learning to Rank）应用于混合检索与排序？",
+    "ground_truth_keywords": [
+      "Learning to Rank",
+      "RAG",
+      "混合检索",
+      "排序",
+      "检索增强生成"
+    ]
+  },
+  {
+    "question": "两阶段检索的工业级方案中，粗排召回和精排重排分别起到什么作用？",
+    "ground_truth_keywords": [
+      "两阶段检索",
+      "粗排召回",
+      "精排重排",
+      "工业级方案",
+      "检索"
+    ]
+  },
+  {
+    "question": "查询扩展（Query Expansion）如何增强稀疏检索的效果？",
+    "ground_truth_keywords": [
+      "查询扩展",
+      "Query Expansion",
+      "稀疏检索",
+      "增强",
+      "检索"
+    ]
+  },
+  {
+    "question": "近似最近邻搜索算法中，LSH、PQ、HNSW和DiskANN各自有什么特点？",
+    "ground_truth_keywords": [
+      "近似最近邻",
+      "ANN",
+      "LSH",
+      "PQ",
+      "HNSW",
+      "DiskANN",
+      "搜索算法"
+    ]
+  },
+  {
+    "question": "在RAG系统中，如何利用MMR（最大边际相关性）实现多样性检索？",
+    "ground_truth_keywords": [
+      "多样性检索",
+      "MMR",
+      "最大边际相关性",
+      "RAG",
+      "检索"
+    ]
+  },
+  {
+    "question": "检索结果的上下文窗口优化中，合并、去重和排序策略如何提升效果？",
+    "ground_truth_keywords": [
+      "上下文窗口",
+      "合并",
+      "去重",
+      "排序策略",
+      "检索结果",
+      "优化"
+    ]
+  },
+  {
+    "question": "文档切片（Chunking）的工程实践中，如何平衡语义边界和长度？",
+    "ground_truth_keywords": [
+      "文档切片",
+      "Chunking",
+      "语义边界",
+      "长度平衡",
+      "工程实践"
+    ]
+  },
+  {
+    "question": "递归字符分割（Recursive Character Split）算法的实现原理是什么？",
+    "ground_truth_keywords": [
+      "递归字符分割",
+      "Recursive Character Split",
+      "算法实现",
+      "分割",
+      "文本切片"
+    ]
+  },
+  {
+    "question": "语义切片（Semantic Chunking）如何基于嵌入相似度实现自适应切分？",
+    "ground_truth_keywords": [
+      "语义切片",
+      "Semantic Chunking",
+      "嵌入相似度",
+      "自适应切分",
+      "文本切片"
+    ]
+  },
+  {
+    "question": "句子感知切片（Sentence-Aware Chunking）如何保持语言完整性？",
+    "ground_truth_keywords": [
+      "句子感知切片",
+      "Sentence-Aware Chunking",
+      "语言完整性",
+      "文本切片",
+      "切分"
+    ]
+  },
+  {
+    "question": "Small-to-Big 检索策略的核心思想是什么？",
+    "ground_truth_keywords": [
+      "Small-to-Big",
+      "小粒度检索",
+      "大窗口返回",
+      "检索策略",
+      "文本切片"
+    ]
+  },
+  {
+    "question": "父子文档索引（Parent-Child Index）如何建立 chunk 与原文的映射关系？",
+    "ground_truth_keywords": [
+      "父子文档索引",
+      "Parent-Child Index",
+      "chunk",
+      "原文",
+      "映射关系"
+    ]
+  },
+  {
+    "question": "针对 PDF、网页、代码和表格等不同文档类型，切片策略有哪些差异？",
+    "ground_truth_keywords": [
+      "文档类型",
+      "切片策略",
+      "PDF",
+      "网页",
+      "代码",
+      "表格"
+    ]
+  },
+  {
+    "question": "滑动窗口切片与上下文扩展技术如何提升检索效果？",
+    "ground_truth_keywords": [
+      "滑动窗口切片",
+      "上下文扩展",
+      "检索效果",
+      "文本切片",
+      "上下文"
+    ]
+  },
+  {
+    "question": "基于文档结构的智能切片如何利用标题层级和段落信息？",
+    "ground_truth_keywords": [
+      "文档结构",
+      "智能切片",
+      "标题层级",
+      "段落信息",
+      "文本切片"
+    ]
+  },
+  {
+    "question": "多粒度索引中同时维护粗粒度和细粒度 chunk 索引的目的是什么？",
+    "ground_truth_keywords": [
+      "多粒度索引",
+      "粗粒度",
+      "细粒度",
+      "chunk",
+      "索引"
+    ]
+  },
+  {
+    "question": "切片大小对 RAG 性能的影响有哪些系统实验分析结论？",
+    "ground_truth_keywords": [
+      "切片大小",
+      "RAG",
+      "性能",
+      "系统实验",
+      "分析"
+    ]
+  },
+  {
+    "question": "动态切片（Dynamic Chunking）如何基于内容密度调整切片大小？",
+    "ground_truth_keywords": [
+      "动态切片",
+      "Dynamic Chunking",
+      "内容密度",
+      "调整大小",
+      "文本切片"
+    ]
+  },
+  {
+    "question": "AI Agent 的认知架构中，感知、推理、规划、执行是如何形成闭环的？",
+    "ground_truth_keywords": [
+      "AI Agent",
+      "认知架构",
+      "感知",
+      "推理",
+      "规划",
+      "执行",
+      "闭环"
+    ]
+  },
+  {
+    "question": "ReAct 范式中，Reasoning 与 Acting 如何交替协作？",
+    "ground_truth_keywords": [
+      "ReAct",
+      "Reasoning",
+      "Acting",
+      "交替协作",
+      "机制"
+    ]
+  },
+  {
+    "question": "在Function Calling中，如何定义工具的参数，以及如何进行参数校验和错误恢复？",
+    "ground_truth_keywords": [
+      "Function Calling",
+      "工具定义",
+      "参数校验",
+      "错误恢复",
+      "工具调用"
+    ]
+  },
+  {
+    "question": "Plan-and-Execute Agent的两阶段范式是什么？请解释其工作原理。",
+    "ground_truth_keywords": [
+      "Plan-and-Execute Agent",
+      "两阶段范式",
+      "规划",
+      "执行",
+      "先规划后执行"
+    ]
+  },
+  {
+    "question": "Agent记忆系统设计中，短期记忆、长期记忆和工作记忆如何协同工作？",
+    "ground_truth_keywords": [
+      "记忆系统",
+      "短期记忆",
+      "长期记忆",
+      "工作记忆",
+      "协同"
+    ]
+  },
+  {
+    "question": "在Agent的工具编排中，工具注册、发现、调用和结果整合的流程是怎样的？",
+    "ground_truth_keywords": [
+      "工具编排",
+      "工具注册",
+      "工具发现",
+      "工具调用",
+      "结果整合"
+    ]
+  },
+  {
+    "question": "LLM Compiler如何将任务编译为可执行的DAG架构？",
+    "ground_truth_keywords": [
+      "LLM Compiler",
+      "任务编译",
+      "可执行DAG",
+      "DAG架构",
+      "Agent架构"
+    ]
+  },
+  {
+    "question": "反思式Agent（Reflexion）如何通过自我批评来改进执行结果？",
+    "ground_truth_keywords": [
+      "反思式Agent",
+      "Reflexion",
+      "自我批评",
+      "改进执行结果",
+      "执行结果"
+    ]
+  },
+  {
+    "question": "从SWE-Agent到Devin，代码生成Agent的技术演进经历了哪些关键变化？",
+    "ground_truth_keywords": [
+      "代码生成Agent",
+      "SWE-Agent",
+      "Devin",
+      "技术演进",
+      "代码生成"
+    ]
+  },
+  {
+    "question": "Agent的安全护栏包括哪些方面？如何实现输入过滤、工具权限控制和输出审核？",
+    "ground_truth_keywords": [
+      "安全护栏",
+      "输入过滤",
+      "工具权限",
+      "输出审核",
+      "安全"
+    ]
+  },
+  {
+    "question": "评估Agent时，任务完成率、工具调用准确性和效率分别如何衡量？",
+    "ground_truth_keywords": [
+      "评估方法",
+      "任务完成率",
+      "工具调用准确性",
+      "效率",
+      "Agent评估"
+    ]
+  },
+  {
+    "question": "多模态Agent如何整合视觉、语音和文本的感知与行动？",
+    "ground_truth_keywords": [
+      "多模态Agent",
+      "视觉",
+      "语音",
+      "文本",
+      "感知与行动"
+    ]
+  },
+  {
+    "question": "在多智能体系统中，Agent之间进行通信时，常用的核心通信协议有哪些？消息设计通常包含哪些关键部分？",
+    "ground_truth_keywords": [
+      "多智能体系统",
+      "通信协议",
+      "消息设计",
+      "Agent通信",
+      "消息格式",
+      "协议栈",
+      "交互协议",
+      "消息类型"
+    ]
+  },
+  {
+    "question": "AutoGen框架如何通过对话驱动多个Agent之间的协作？其核心实现机制是什么？",
+    "ground_truth_keywords": [
+      "AutoGen",
+      "对话驱动",
+      "多Agent协作",
+      "协作实现",
+      "对话管理",
+      "Agent交互",
+      "框架机制",
+      "对话流程"
+    ]
+  },
+  {
+    "question": "CrewAI的角色驱动架构中，Agent、Task和Crew三者是如何协作的？请描述其协作模型。",
+    "ground_truth_keywords": [
+      "CrewAI",
+      "角色驱动",
+      "Agent",
+      "Task",
+      "Crew",
+      "协作模型",
+      "任务分配",
+      "角色定义"
+    ]
+  },
+  {
+    "question": "LangGraph的状态图Agent如何实现条件分支、循环和人机协同？请解释其状态图机制。",
+    "ground_truth_keywords": [
+      "LangGraph",
+      "状态图",
+      "条件分支",
+      "循环",
+      "人机协同",
+      "Agent状态",
+      "图结构",
+      "状态转移"
+    ]
+  },
+  {
+    "question": "多Agent辩论机制如何通过对抗性讨论提升推理质量？其核心原理是什么？",
+    "ground_truth_keywords": [
+      "多Agent辩论",
+      "对抗",
+      "推理质量",
+      "辩论机制",
+      "论证",
+      "观点对抗",
+      "推理提升",
+      "多轮辩论"
+    ]
+  },
+  {
+    "question": "在层级式多Agent编排中，主管Agent如何分解任务并分配给子Agent？请描述其工作流程。",
+    "ground_truth_keywords": [
+      "层级式编排",
+      "主管Agent",
+      "任务分解",
+      "子Agent",
+      "任务分配",
+      "层级结构",
+      "编排流程",
+      "任务协调"
+    ]
+  },
+  {
+    "question": "并行Agent执行时，如何进行任务拆分、结果合并和冲突消解？请说明其关键步骤。",
+    "ground_truth_keywords": [
+      "并行执行",
+      "任务拆分",
+      "结果合并",
+      "冲突消解",
+      "并行Agent",
+      "任务分解",
+      "合并策略",
+      "冲突处理"
+    ]
+  },
+  {
+    "question": "Agent之间如何进行知识共享和经验传递？请列举常见的机制或方法。",
+    "ground_truth_keywords": [
+      "知识共享",
+      "经验传递",
+      "Agent间",
+      "知识传递",
+      "共享机制",
+      "经验迁移",
+      "知识库",
+      "通信协议"
+    ]
+  },
+  {
+    "question": "MetaGPT如何模拟软件公司的角色分工来实现多Agent代码生成？其角色设计是怎样的？",
+    "ground_truth_keywords": [
+      "MetaGPT",
+      "角色分工",
+      "软件公司",
+      "代码生成",
+      "多Agent",
+      "角色模拟",
+      "软件开发",
+      "角色设计"
+    ]
+  },
+  {
+    "question": "多Agent强化学习如何通过博弈来优化协作策略？请解释其核心机制。",
+    "ground_truth_keywords": [
+      "多Agent强化学习",
+      "博弈",
+      "协作策略",
+      "策略优化",
+      "博弈论",
+      "协作学习",
+      "强化学习",
+      "策略协调"
+    ]
+  },
+  {
+    "question": "ChatDev 如何通过自然语言沟通实现虚拟软件团队的协作？",
+    "ground_truth_keywords": [
+      "ChatDev",
+      "自然语言沟通",
+      "虚拟软件团队",
+      "多智能体系统",
+      "协作"
+    ]
+  },
+  {
+    "question": "在多 Agent 系统中，如何通过日志和追踪实现可观测性？",
+    "ground_truth_keywords": [
+      "多 Agent 系统",
+      "可观测性",
+      "日志",
+      "追踪",
+      "性能监控"
+    ]
+  },
+  {
+    "question": "RAGAS 评估框架中包含了哪些关键指标，它们是如何定义和计算的？",
+    "ground_truth_keywords": [
+      "RAGAS",
+      "评估框架",
+      "指标定义",
+      "计算方式",
+      "使用场景"
+    ]
+  },
+  {
+    "question": "Context Precision 和 Context Recall 在 RAG 评估中如何计算，工程实现上需要注意什么？",
+    "ground_truth_keywords": [
+      "Context Precision",
+      "Context Recall",
+      "计算",
+      "工程实现",
+      "RAG 评估"
+    ]
+  },
+  {
+    "question": "基于 NLI 的 Faithfulness 评估如何判断生成内容的事实一致性？",
+    "ground_truth_keywords": [
+      "Faithfulness",
+      "忠实度",
+      "NLI",
+      "事实一致性",
+      "评估"
+    ]
+  },
+  {
+    "question": "Answer Relevancy 的自动化评估方法有哪些，如何衡量回答与问题的相关性？",
+    "ground_truth_keywords": [
+      "Answer Relevancy",
+      "回答相关性",
+      "自动化评估",
+      "方法",
+      "相关性"
+    ]
+  },
+  {
+    "question": "构建高质量的 RAG 评估数据集时，如何标注评测集以确保标注质量？",
+    "ground_truth_keywords": [
+      "RAG 评估数据集",
+      "构建",
+      "标注",
+      "高质量",
+      "评测集"
+    ]
+  },
+  {
+    "question": "端到端 RAG 评估管线如何串联检索评估和生成评估？",
+    "ground_truth_keywords": [
+      "端到端",
+      "RAG 评估",
+      "管线",
+      "检索评估",
+      "生成评估",
+      "串联"
+    ]
+  },
+  {
+    "question": "在 RAG 质量判断中，人工评估和自动评估各自的适用场景和局限性是什么？",
+    "ground_truth_keywords": [
+      "人工评估",
+      "自动评估",
+      "RAG",
+      "质量判断",
+      "适用场景",
+      "局限性"
+    ]
+  },
+  {
+    "question": "基于 LLM-as-Judge 的 RAG 评估范式是如何运作的，有哪些优势？",
+    "ground_truth_keywords": [
+      "LLM-as-Judge",
+      "RAG 评估",
+      "范式",
+      "运作",
+      "优势"
+    ]
+  },
+  {
+    "question": "如何设计和选择RAG系统的A/B测试框架中的关键指标？",
+    "ground_truth_keywords": [
+      "RAG系统",
+      "A/B测试",
+      "框架设计",
+      "指标选择",
+      "评估"
+    ]
+  },
+  {
+    "question": "RAG评估中常见的位置偏差、长度偏差和文体偏差分别是什么？如何避免这些陷阱？",
+    "ground_truth_keywords": [
+      "位置偏差",
+      "长度偏差",
+      "文体偏差",
+      "RAG评估",
+      "陷阱"
+    ]
+  },
+  {
+    "question": "如何使用LLM自动构建RAG评测集？合成数据生成的具体方法有哪些？",
+    "ground_truth_keywords": [
+      "合成数据生成",
+      "LLM",
+      "RAG评测集",
+      "自动构建",
+      "评估"
+    ]
+  },
+  {
+    "question": "RAG系统的持续评估与回归测试策略包括哪些关键步骤？",
+    "ground_truth_keywords": [
+      "持续评估",
+      "回归测试",
+      "RAG系统",
+      "策略",
+      "测试"
+    ]
+  },
+  {
+    "question": "在RAG检索质量评估中，F1、NDCG和MRR指标各有什么优缺点？如何对比分析？",
+    "ground_truth_keywords": [
+      "F1",
+      "NDCG",
+      "MRR",
+      "检索质量",
+      "多指标对比",
+      "RAG"
+    ]
+  },
+  {
+    "question": "Chain-of-Thought（CoT）提示如何通过中间推理提升复杂任务的准确率？",
+    "ground_truth_keywords": [
+      "Chain-of-Thought",
+      "CoT",
+      "中间推理",
+      "复杂任务",
+      "准确率",
+      "提示工程"
+    ]
+  },
+  {
+    "question": "Tree-of-Thought（ToT）方法如何探索多条推理路径并搜索最优解？",
+    "ground_truth_keywords": [
+      "Tree-of-Thought",
+      "ToT",
+      "推理路径",
+      "最优解搜索",
+      "提示工程"
+    ]
+  },
+  {
+    "question": "少样本提示（Few-Shot Prompting）的策略设计包括哪些关键要素？如何选择示例？",
+    "ground_truth_keywords": [
+      "少样本提示",
+      "Few-Shot Prompting",
+      "策略设计",
+      "示例选择",
+      "提示工程"
+    ]
+  },
+  {
+    "question": "提示注入（Prompt Injection）攻击有哪些常见类型？相应的防御技术有哪些？",
+    "ground_truth_keywords": [
+      "提示注入",
+      "Prompt Injection",
+      "攻击",
+      "防御技术",
+      "综述"
+    ]
+  },
+  {
+    "question": "从JSON Mode到Function Calling，结构化输出的演进过程是怎样的？各有什么特点？",
+    "ground_truth_keywords": [
+      "结构化输出",
+      "JSON Mode",
+      "Function Calling",
+      "演进",
+      "提示工程"
+    ]
+  },
+  {
+    "question": "在提示工程的系统化方法中，如何通过模板设计、变量管理和A/B优化来提升LLM的输出质量？",
+    "ground_truth_keywords": [
+      "提示工程",
+      "系统化方法",
+      "模板设计",
+      "变量管理",
+      "A/B优化"
+    ]
+  },
+  {
+    "question": "针对长上下文LLM，有哪些提示策略可以优化信息密度、位置效应和注意力分配？",
+    "ground_truth_keywords": [
+      "长上下文",
+      "提示策略",
+      "信息密度",
+      "位置效应",
+      "注意力分配"
+    ]
+  },
+  {
+    "question": "设计System Prompt时，如何通过角色定义、约束声明和输出格式来控制LLM的行为？",
+    "ground_truth_keywords": [
+      "System Prompt",
+      "角色定义",
+      "约束声明",
+      "输出格式"
+    ]
+  },
+  {
+    "question": "DSPy框架如何通过编程化提示优化和自动组合的声明式方法来改进提示工程？",
+    "ground_truth_keywords": [
+      "DSPy",
+      "编程化提示优化",
+      "自动组合",
+      "声明式方法"
+    ]
+  },
+  {
+    "question": "提示压缩（Prompt Compression）技术有哪些减少token消耗的策略？",
+    "ground_truth_keywords": [
+      "提示压缩",
+      "Prompt Compression",
+      "减少token消耗",
+      "策略"
+    ]
+  },
+  {
+    "question": "基于LLM的文本摘要策略中，Extractive、Abstractive和混合方法各自有什么特点？",
+    "ground_truth_keywords": [
+      "文本摘要",
+      "Extractive",
+      "Abstractive",
+      "混合方法"
+    ]
+  },
+  {
+    "question": "在LLM的对齐技术中，RLHF、DPO和宪法AI这三种方法有何对比分析？",
+    "ground_truth_keywords": [
+      "对齐技术",
+      "RLHF",
+      "DPO",
+      "宪法AI",
+      "对比分析"
+    ]
+  },
+  {
+    "question": "LLM推理加速技术中，KV Cache、Speculative Decoding和量化推理是如何工作的？",
+    "ground_truth_keywords": [
+      "推理加速",
+      "KV Cache",
+      "Speculative Decoding",
+      "量化推理"
+    ]
+  }
+]

@@ -1,0 +1,891 @@
+{
+  "avg_precision": 1.0,
+  "avg_recall": 0.9394,
+  "avg_f1": 0.964,
+  "num_queries": 98,
+  "top_k": 5,
+  "details": [
+    {
+      "question": "RAG核心架构包含哪三个主要模块？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 6,
+      "gt_kw": 6
+    },
+    {
+      "question": "RAG的三种主要范式演进是什么？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "RAG中检索模块的设计原则有哪些？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "RAG生成模块如何将检索上下文注入LLM Prompt？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "RAG知识库构建包括哪些关键步骤？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "RAG索引模块从文档到向量的全流程是什么？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "RAG系统有哪些延迟优化策略？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "Self-RAG的核心原理是什么？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "CRAG（Corrective RAG）是如何实现纠错式检索增强生成的？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "Graph RAG如何利用知识图谱进行检索增强生成？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "RAG系统中常用的Query改写技术有哪些？请列举并简要说明Multi-Query、HyDE和Step-Back各自的核",
+      "precision": 1.0,
+      "recall": 0.8,
+      "f1": 0.8889,
+      "relevant": 5,
+      "hit_kw": 4,
+      "gt_kw": 5
+    },
+    {
+      "question": "RAG应用中幻觉问题的主要成因是什么？有哪些缓解策略？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "文本嵌入的数学原理是什么？如何从几何直觉理解嵌入向量的相似性？",
+      "precision": 1.0,
+      "recall": 0.8,
+      "f1": 0.8889,
+      "relevant": 5,
+      "hit_kw": 4,
+      "gt_kw": 5
+    },
+    {
+      "question": "BGE-M3模型在嵌入方案上有哪些特点？它如何实现多语言、多功能和多粒度？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "OpenAI text-embedding-3系列模型相比前代有哪些创新？维度可调功能如何实现？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "对比学习在嵌入模型训练中如何发挥作用？请解释其基本原理和应用场景。",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "MTEB基准评测主要衡量嵌入模型的哪些能力？它如何全面评估检索、分类和聚类性能？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "如何针对特定领域微调嵌入模型以优化检索效果？请列出关键步骤和注意事项。",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "稀疏嵌入和稠密嵌入有什么区别？SPLADE和BGE-M3 Sparse在实现上各有何特点？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "多语言嵌入模型面临哪些主要挑战？目前有哪些有效的解决方案？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "将嵌入模型从 float32 压缩到 int8 时，精度会损失多少？有哪些主要的量化方法？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 6,
+      "gt_kw": 6
+    },
+    {
+      "question": "ColBERT 的迟交互机制如何实现高效的检索？与传统向量检索有何不同？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "Matryoshka 嵌入表示如何用一个模型支持多维度输出？这种技术有什么实际应用价值？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "指令感知嵌入（Instruction-tuned Embedding）如何根据任务调整表示？它解决了传统嵌入的哪些问题？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "混合检索的完整技术栈包括哪些组件？如何实现向量搜索与关键词搜索的有效融合？",
+      "precision": 1.0,
+      "recall": 0.8333,
+      "f1": 0.9091,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 6
+    },
+    {
+      "question": "稠密检索中 Flat、IVF、HNSW 三种索引结构在性能、内存和精度上各有什么优缺点？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 7,
+      "gt_kw": 7
+    },
+    {
+      "question": "BM25 算法是如何从 TF-IDF 演变为概率检索框架的？请推导其核心公式。",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "倒数排序融合（RRF）的数学原理是什么？在工程实践中如何设置参数以获得最佳效果？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "多路召回架构中，向量、关键词、实体和图谱这四路召回如何协同工作？各自的优缺点是什么？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 7,
+      "gt_kw": 7
+    },
+    {
+      "question": "Cohere、BGE-Reranker 和 RankGPT 这三种重排序模型在性能、成本和适用场景上有什么差异？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 7,
+      "gt_kw": 7
+    },
+    {
+      "question": "在RAG系统中，如何将学习排序（Learning to Rank）应用于混合检索与排序？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "两阶段检索的工业级方案中，粗排召回和精排重排分别起到什么作用？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "查询扩展（Query Expansion）如何增强稀疏检索的效果？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "近似最近邻搜索算法中，LSH、PQ、HNSW和DiskANN各自有什么特点？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 7,
+      "gt_kw": 7
+    },
+    {
+      "question": "在RAG系统中，如何利用MMR（最大边际相关性）实现多样性检索？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "检索结果的上下文窗口优化中，合并、去重和排序策略如何提升效果？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 6,
+      "gt_kw": 6
+    },
+    {
+      "question": "文档切片（Chunking）的工程实践中，如何平衡语义边界和长度？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "递归字符分割（Recursive Character Split）算法的实现原理是什么？",
+      "precision": 1.0,
+      "recall": 0.8,
+      "f1": 0.8889,
+      "relevant": 5,
+      "hit_kw": 4,
+      "gt_kw": 5
+    },
+    {
+      "question": "语义切片（Semantic Chunking）如何基于嵌入相似度实现自适应切分？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "句子感知切片（Sentence-Aware Chunking）如何保持语言完整性？",
+      "precision": 1.0,
+      "recall": 0.8,
+      "f1": 0.8889,
+      "relevant": 5,
+      "hit_kw": 4,
+      "gt_kw": 5
+    },
+    {
+      "question": "Small-to-Big 检索策略的核心思想是什么？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "父子文档索引（Parent-Child Index）如何建立 chunk 与原文的映射关系？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "针对 PDF、网页、代码和表格等不同文档类型，切片策略有哪些差异？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 6,
+      "gt_kw": 6
+    },
+    {
+      "question": "滑动窗口切片与上下文扩展技术如何提升检索效果？",
+      "precision": 1.0,
+      "recall": 0.8,
+      "f1": 0.8889,
+      "relevant": 5,
+      "hit_kw": 4,
+      "gt_kw": 5
+    },
+    {
+      "question": "基于文档结构的智能切片如何利用标题层级和段落信息？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "多粒度索引中同时维护粗粒度和细粒度 chunk 索引的目的是什么？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "切片大小对 RAG 性能的影响有哪些系统实验分析结论？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "动态切片（Dynamic Chunking）如何基于内容密度调整切片大小？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "AI Agent 的认知架构中，感知、推理、规划、执行是如何形成闭环的？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 7,
+      "gt_kw": 7
+    },
+    {
+      "question": "ReAct 范式中，Reasoning 与 Acting 如何交替协作？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "在Function Calling中，如何定义工具的参数，以及如何进行参数校验和错误恢复？",
+      "precision": 1.0,
+      "recall": 0.8,
+      "f1": 0.8889,
+      "relevant": 5,
+      "hit_kw": 4,
+      "gt_kw": 5
+    },
+    {
+      "question": "Plan-and-Execute Agent的两阶段范式是什么？请解释其工作原理。",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "Agent记忆系统设计中，短期记忆、长期记忆和工作记忆如何协同工作？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "在Agent的工具编排中，工具注册、发现、调用和结果整合的流程是怎样的？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "LLM Compiler如何将任务编译为可执行的DAG架构？",
+      "precision": 1.0,
+      "recall": 0.6,
+      "f1": 0.75,
+      "relevant": 5,
+      "hit_kw": 3,
+      "gt_kw": 5
+    },
+    {
+      "question": "反思式Agent（Reflexion）如何通过自我批评来改进执行结果？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "从SWE-Agent到Devin，代码生成Agent的技术演进经历了哪些关键变化？",
+      "precision": 1.0,
+      "recall": 0.8,
+      "f1": 0.8889,
+      "relevant": 5,
+      "hit_kw": 4,
+      "gt_kw": 5
+    },
+    {
+      "question": "Agent的安全护栏包括哪些方面？如何实现输入过滤、工具权限控制和输出审核？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "评估Agent时，任务完成率、工具调用准确性和效率分别如何衡量？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "多模态Agent如何整合视觉、语音和文本的感知与行动？",
+      "precision": 1.0,
+      "recall": 0.8,
+      "f1": 0.8889,
+      "relevant": 5,
+      "hit_kw": 4,
+      "gt_kw": 5
+    },
+    {
+      "question": "在多智能体系统中，Agent之间进行通信时，常用的核心通信协议有哪些？消息设计通常包含哪些关键部分？",
+      "precision": 1.0,
+      "recall": 0.75,
+      "f1": 0.8571,
+      "relevant": 5,
+      "hit_kw": 6,
+      "gt_kw": 8
+    },
+    {
+      "question": "AutoGen框架如何通过对话驱动多个Agent之间的协作？其核心实现机制是什么？",
+      "precision": 1.0,
+      "recall": 0.5,
+      "f1": 0.6667,
+      "relevant": 5,
+      "hit_kw": 4,
+      "gt_kw": 8
+    },
+    {
+      "question": "CrewAI的角色驱动架构中，Agent、Task和Crew三者是如何协作的？请描述其协作模型。",
+      "precision": 1.0,
+      "recall": 0.875,
+      "f1": 0.9333,
+      "relevant": 5,
+      "hit_kw": 7,
+      "gt_kw": 8
+    },
+    {
+      "question": "LangGraph的状态图Agent如何实现条件分支、循环和人机协同？请解释其状态图机制。",
+      "precision": 1.0,
+      "recall": 0.875,
+      "f1": 0.9333,
+      "relevant": 5,
+      "hit_kw": 7,
+      "gt_kw": 8
+    },
+    {
+      "question": "多Agent辩论机制如何通过对抗性讨论提升推理质量？其核心原理是什么？",
+      "precision": 1.0,
+      "recall": 0.625,
+      "f1": 0.7692,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 8
+    },
+    {
+      "question": "在层级式多Agent编排中，主管Agent如何分解任务并分配给子Agent？请描述其工作流程。",
+      "precision": 1.0,
+      "recall": 0.5,
+      "f1": 0.6667,
+      "relevant": 5,
+      "hit_kw": 4,
+      "gt_kw": 8
+    },
+    {
+      "question": "并行Agent执行时，如何进行任务拆分、结果合并和冲突消解？请说明其关键步骤。",
+      "precision": 1.0,
+      "recall": 0.875,
+      "f1": 0.9333,
+      "relevant": 5,
+      "hit_kw": 7,
+      "gt_kw": 8
+    },
+    {
+      "question": "Agent之间如何进行知识共享和经验传递？请列举常见的机制或方法。",
+      "precision": 1.0,
+      "recall": 0.625,
+      "f1": 0.7692,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 8
+    },
+    {
+      "question": "MetaGPT如何模拟软件公司的角色分工来实现多Agent代码生成？其角色设计是怎样的？",
+      "precision": 1.0,
+      "recall": 0.625,
+      "f1": 0.7692,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 8
+    },
+    {
+      "question": "多Agent强化学习如何通过博弈来优化协作策略？请解释其核心机制。",
+      "precision": 1.0,
+      "recall": 0.625,
+      "f1": 0.7692,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 8
+    },
+    {
+      "question": "ChatDev 如何通过自然语言沟通实现虚拟软件团队的协作？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "在多 Agent 系统中，如何通过日志和追踪实现可观测性？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "RAGAS 评估框架中包含了哪些关键指标，它们是如何定义和计算的？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "Context Precision 和 Context Recall 在 RAG 评估中如何计算，工程实现上需要注意什么",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "基于 NLI 的 Faithfulness 评估如何判断生成内容的事实一致性？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "Answer Relevancy 的自动化评估方法有哪些，如何衡量回答与问题的相关性？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "构建高质量的 RAG 评估数据集时，如何标注评测集以确保标注质量？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "端到端 RAG 评估管线如何串联检索评估和生成评估？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 6,
+      "gt_kw": 6
+    },
+    {
+      "question": "在 RAG 质量判断中，人工评估和自动评估各自的适用场景和局限性是什么？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 6,
+      "gt_kw": 6
+    },
+    {
+      "question": "基于 LLM-as-Judge 的 RAG 评估范式是如何运作的，有哪些优势？",
+      "precision": 1.0,
+      "recall": 0.8,
+      "f1": 0.8889,
+      "relevant": 5,
+      "hit_kw": 4,
+      "gt_kw": 5
+    },
+    {
+      "question": "如何设计和选择RAG系统的A/B测试框架中的关键指标？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "RAG评估中常见的位置偏差、长度偏差和文体偏差分别是什么？如何避免这些陷阱？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "如何使用LLM自动构建RAG评测集？合成数据生成的具体方法有哪些？",
+      "precision": 1.0,
+      "recall": 0.8,
+      "f1": 0.8889,
+      "relevant": 5,
+      "hit_kw": 4,
+      "gt_kw": 5
+    },
+    {
+      "question": "RAG系统的持续评估与回归测试策略包括哪些关键步骤？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "在RAG检索质量评估中，F1、NDCG和MRR指标各有什么优缺点？如何对比分析？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 6,
+      "gt_kw": 6
+    },
+    {
+      "question": "Chain-of-Thought（CoT）提示如何通过中间推理提升复杂任务的准确率？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 6,
+      "gt_kw": 6
+    },
+    {
+      "question": "Tree-of-Thought（ToT）方法如何探索多条推理路径并搜索最优解？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "少样本提示（Few-Shot Prompting）的策略设计包括哪些关键要素？如何选择示例？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "提示注入（Prompt Injection）攻击有哪些常见类型？相应的防御技术有哪些？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "从JSON Mode到Function Calling，结构化输出的演进过程是怎样的？各有什么特点？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "在提示工程的系统化方法中，如何通过模板设计、变量管理和A/B优化来提升LLM的输出质量？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "针对长上下文LLM，有哪些提示策略可以优化信息密度、位置效应和注意力分配？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "设计System Prompt时，如何通过角色定义、约束声明和输出格式来控制LLM的行为？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 4,
+      "gt_kw": 4
+    },
+    {
+      "question": "DSPy框架如何通过编程化提示优化和自动组合的声明式方法来改进提示工程？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 4,
+      "gt_kw": 4
+    },
+    {
+      "question": "提示压缩（Prompt Compression）技术有哪些减少token消耗的策略？",
+      "precision": 1.0,
+      "recall": 0.75,
+      "f1": 0.8571,
+      "relevant": 5,
+      "hit_kw": 3,
+      "gt_kw": 4
+    },
+    {
+      "question": "基于LLM的文本摘要策略中，Extractive、Abstractive和混合方法各自有什么特点？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 4,
+      "gt_kw": 4
+    },
+    {
+      "question": "在LLM的对齐技术中，RLHF、DPO和宪法AI这三种方法有何对比分析？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 5,
+      "gt_kw": 5
+    },
+    {
+      "question": "LLM推理加速技术中，KV Cache、Speculative Decoding和量化推理是如何工作的？",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "relevant": 5,
+      "hit_kw": 4,
+      "gt_kw": 4
+    }
+  ]
+}
